@@ -5,6 +5,7 @@ import mariadb from 'mariadb';
 import {normalizeEditableItems,validateOrder} from './validation.js';
 import {buildSyntheticAnalytics,canTransitionStatus,orderAttention} from './domain.js';
 import {identityIsConfigured,resolveIdentity} from './identity.js';
+import {requiresStaffAuthentication} from './admin-access.js';
 
 for (const key of ['DB_PASSWORD','ADMIN_USER','ADMIN_PASSWORD']) {
  if (!process.env[key] || /replace-|PUT_YOUR|CHOOSE_A|YOUR_/i.test(process.env[key])) throw new Error(`Set ${key} in .env before starting.`);
@@ -62,7 +63,7 @@ const server = http.createServer(async(req,res)=>{
  res.setHeader('X-Frame-Options','DENY');
  const url = new URL(req.url,'http://localhost');
  try {
-  if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/api/admin')) {
+  if (requiresStaffAuthentication(url)) {
    if (!await isAdminRequest(req)) {res.setHeader('WWW-Authenticate','Basic realm="Luigi staff", charset="UTF-8"'); return send(res,401,{error:'Staff login required'});}
   }
   if (req.method==='GET' && url.pathname==='/api/session') {
@@ -110,8 +111,9 @@ const server = http.createServer(async(req,res)=>{
    try {return send(res,200,buildSyntheticAnalytics(url.searchParams.get('view') || 'today'));}
    catch {return send(res,400,{error:'Choose a supported analytics view.'});}
   }
-  if (req.method==='GET' && url.pathname==='/admin-model.js') {
-   const strSource=await readFile(new URL('./admin-model.js',import.meta.url));
+  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js'};
+  if (req.method==='GET' && mapBrowserModules[url.pathname]) {
+   const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));
    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(strSource);
   }
   if (req.method==='GET' && url.pathname==='/api/admin/customers') {

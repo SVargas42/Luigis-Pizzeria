@@ -44,13 +44,17 @@
   <dialog id="edit-dialog" aria-labelledby="edit-title" aria-describedby="edit-help"><form method="dialog" class="dialog-inner" id="edit-form"><h2 id="edit-title">Edit order</h2><p id="edit-help" class="hint">Update one item per line using <code>kind | item description | quantity</code>. The server checks items against today’s menu and recalculates the total.</p><p class="hint">Examples: <code>pizza | Large pizza with Cheese, Pepperoni | 1</code>, <code>side | Breadsticks | 2</code>, or <code>drink | Dr Pepper (Large) | 1</code>.</p><label for="edit-items">Order items</label><textarea id="edit-items" spellcheck="false" required></textarea><p class="sr-status" id="edit-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" type="button" id="cancel-edit">Cancel</button><button class="btn btn-primary" type="submit" id="save-edit">Save order changes</button></div></form></dialog>
   <script type="module">
     import {parseEditedItems} from '/admin-model.js';
+    import {createDemoAdminState,handleDemoAdminRequest} from '/admin-demo.js';
     const $ = strId => document.getElementById(strId);
     const money = nCents => '$' + (Number(nCents) / 100).toFixed(2);
+    const bDemoMode=new URLSearchParams(location.search).get('demo')==='1';
+    const objDemoState=bDemoMode?createDemoAdminState():null;
     const objStatusLabels = {received:'Order received',preparing:'Being prepared',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
     const objNextStatuses = {received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
     let nEditingOrderId = null;
 
     async function api(strPath,objOptions={}) {
+      if(bDemoMode)return handleDemoAdminRequest(strPath,objOptions,objDemoState);
       const objResponse = await fetch(strPath,objOptions);
       const objData = await objResponse.json();
       if(!objResponse.ok) throw new Error(objData.error || 'The request could not be completed.');
@@ -201,6 +205,11 @@
       catch(error){$('analytics-content').replaceChildren(textElement('p',error.message,'empty'));announce(error.message,true);}
     }
     $('analytics-view').addEventListener('change',()=>loadAnalytics($('analytics-view').value));
+    if(bDemoMode){
+      const objNotice=document.createElement('p');objNotice.className='demo-note';objNotice.setAttribute('role','status');objNotice.textContent='Demo admin workspace · sample orders, customer entries, status changes, edits, and analytics are synthetic and stay in this browser.';
+      $('message').before(objNotice);
+      announce('Demo workspace ready. Changes apply to sample data only.');
+    }
     const strInitialTab=new URLSearchParams(location.search).get('tab');
     const objInitialTab=['current','past','analytics','customers'].includes(strInitialTab)?$(`tab-${strInitialTab}`):null;
     if(objInitialTab)setTab(objInitialTab);else loadOrders('current');
