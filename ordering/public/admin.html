@@ -363,12 +363,12 @@
     async function loadBusinessData(){
       try{
         const objData=await api('/api/admin/analytics/business');
-        renderMetricCards('business-summary',[['Estimated sales today',money(objData.salesTodayCents/100)],['Orders today',String(objData.ordersToday)],['Pizzas today',String(objData.pizzasToday)],['Average ticket',money(objData.averageOrderCents/100)],['Cancellation rate',`${objData.cancellationRate}%`],['As of',objData.asOf]]);
+        renderMetricCards('business-summary',[['Estimated sales today',money(objData.salesTodayCents)],['Orders today',String(objData.ordersToday)],['Pizzas today',String(objData.pizzasToday)],['Average ticket',money(objData.averageOrderCents)],['Cancellation rate',`${objData.cancellationRate}%`],['As of',objData.asOf]]);
         const objChart=$('business-chart');objChart.replaceChildren();
         const nMaximum=Math.max(1,...objData.weeklySales.map(objPoint=>objPoint.value));
         const objBars=document.createElement('div');objBars.className='chart';objBars.setAttribute('aria-hidden','true');
-        for(const objPoint of objData.weeklySales){const objWrap=document.createElement('div');objWrap.className='bar-wrap';objWrap.append(textElement('span',money(objPoint.value/100),'bar-value'));const objBar=document.createElement('div');objBar.className='bar';objBar.style.height=`${Math.max(1,objPoint.value/nMaximum*100)}%`;objWrap.append(objBar,textElement('span',objPoint.label.slice(5),'bar-label'));objBars.append(objWrap);}objChart.append(objBars);
-        const objList=document.createElement('ul');for(const objPoint of objData.weeklySales)objList.append(textElement('li',`${objPoint.label}: ${money(objPoint.value/100)}`));objChart.append(objList);
+        for(const objPoint of objData.weeklySales){const objWrap=document.createElement('div');objWrap.className='bar-wrap';objWrap.append(textElement('span',money(objPoint.value),'bar-value'));const objBar=document.createElement('div');objBar.className='bar';objBar.style.height=`${Math.max(1,objPoint.value/nMaximum*100)}%`;objWrap.append(objBar,textElement('span',objPoint.label.slice(5),'bar-label'));objBars.append(objWrap);}objChart.append(objBars);
+        const objList=document.createElement('ul');for(const objPoint of objData.weeklySales)objList.append(textElement('li',`${objPoint.label}: ${money(objPoint.value)}`));objChart.append(objList);
       }catch(error){announce(error.message,true);}
     }
     if(bDemoMode){
