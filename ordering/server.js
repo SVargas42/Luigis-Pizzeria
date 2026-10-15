@@ -2,7 +2,9 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
 import mariadb from 'mariadb';
-import {validateOrder} from './validation.js';
+import {normalizeEditableItems,validateOrder} from './validation.js';
+import {buildSyntheticAnalytics,canTransitionStatus,orderAttention} from './domain.js';
+import {identityIsConfigured,resolveIdentity} from './identity.js';
 
 for (const key of ['DB_PASSWORD','ADMIN_USER','ADMIN_PASSWORD']) {
  if (!process.env[key] || /replace-|PUT_YOUR|CHOOSE_A|YOUR_/i.test(process.env[key])) throw new Error(`Set ${key} in .env before starting.`);
@@ -15,17 +17,22 @@ function authorized(req) {
  const expected = Buffer.from('Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64'));
  return supplied.length === expected.length && timingSafeEqual(supplied,expected);
 }
+async function isAdminRequest(req) {
+ const objIdentity=await resolveIdentity(req);
+ return objIdentity?.role==='admin' || authorized(req);
+}
 async function body(req) {
  if (!(req.headers['content-type'] || '').startsWith('application/json')) throw new Error('JSON required');
  let raw='';
  for await (const chunk of req) {raw += chunk; if (Buffer.byteLength(raw)>32768) throw new Error('Request too large');}
  return JSON.parse(raw);
 }
-async function createOrder(payload) {
+async function createOrder(payload,objIdentity=null) {
  const conn = await pool.getConnection();
  try {
   await conn.beginTransaction();
   const rows = await conn.query('SELECT category,name,price_cents FROM menu_prices');
+  if(objIdentity) payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
   const data = validateOrder(payload,new Map(rows.map(r=>[`${r.category}:${r.name}`,r.price_cents])));
   // Claim the retry key before changing any customer data. Duplicate inserts wait
   // for the original transaction and then return its committed receipt.
@@ -34,6 +41,7 @@ async function createOrder(payload) {
   const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents) VALUES(?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total]);
   await conn.query('UPDATE customers SET first_name=?,last_name=?,phone=? WHERE id=?',[data.customer.firstName,data.customer.lastName,data.customer.phone,customer.id]);
   for (const item of data.items) await conn.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[result.insertId,item.kind,item.description,item.quantity,item.unit]);
+  await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,to_status,details) VALUES(?,?,'created','received','Order placed')",[result.insertId,objIdentity?.email || data.customer.email]);
   await conn.commit();
   return {orderNumber:`LP-${result.insertId}`,totalCents:data.total,items:data.items};
  } catch (error) {
@@ -55,7 +63,11 @@ const server = http.createServer(async(req,res)=>{
  const url = new URL(req.url,'http://localhost');
  try {
   if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/api/admin')) {
-   if (!authorized(req)) {res.setHeader('WWW-Authenticate','Basic realm="Luigi staff", charset="UTF-8"'); return send(res,401,{error:'Staff login required'});}
+   if (!await isAdminRequest(req)) {res.setHeader('WWW-Authenticate','Basic realm="Luigi staff", charset="UTF-8"'); return send(res,401,{error:'Staff login required'});}
+  }
+  if (req.method==='GET' && url.pathname==='/api/session') {
+   const objIdentity=await resolveIdentity(req);
+   return send(res,200,{authenticated:Boolean(objIdentity),authReady:identityIsConfigured(),user:objIdentity});
   }
   if (req.method==='GET' && url.pathname==='/api/menu') {
    const rows = await pool.query('SELECT category,name,price_cents FROM menu_prices');
@@ -71,13 +83,36 @@ const server = http.createServer(async(req,res)=>{
   if (req.method==='POST' && url.pathname==='/api/orders') {
    let payload;
    try {payload=await body(req);} catch {return send(res,400,{error:'Invalid JSON request (maximum 32 KB)'});}
-   try {return send(res,201,await createOrder(payload));}
+   try {return send(res,201,await createOrder(payload,await resolveIdentity(req)));}
    catch (error) { if (error.message.startsWith('Please check')) return send(res,400,{error:error.message}); throw error; }
   }
+  if (req.method==='GET' && url.pathname==='/api/orders/mine') {
+   const objIdentity=await resolveIdentity(req);
+   if(!objIdentity) return send(res,401,{error:'Sign in to view your orders.'});
+   const arrOrders=await pool.query('SELECT id,customer_name,customer_email,status,total_cents,created_at,updated_at FROM orders WHERE customer_email=? ORDER BY id DESC LIMIT 100',[objIdentity.email]);
+   for(const objOrder of arrOrders){
+    objOrder.items=await pool.query('SELECT kind,description,quantity,unit_price_cents FROM order_items WHERE order_id=? ORDER BY id',[objOrder.id]);
+    objOrder.events=await pool.query("SELECT event_type,from_status,to_status,details,created_at FROM order_events WHERE order_id=? AND event_type IN ('created','status_changed') ORDER BY id",[objOrder.id]);
+   }
+   return send(res,200,arrOrders);
+  }
   if (req.method==='GET' && url.pathname==='/api/admin/orders') {
-   const orders = await pool.query('SELECT id,customer_name,customer_email,customer_phone,status,total_cents,created_at FROM orders ORDER BY id DESC LIMIT 100');
-   for (const order of orders) order.items = await pool.query('SELECT description,quantity FROM order_items WHERE order_id=? ORDER BY id',[order.id]);
-   return send(res,200,orders);
+   const strBucket=url.searchParams.get('bucket')==='past'?'past':'current';
+   const strBucketWhere=strBucket==='past'?"status IN ('completed','cancelled')":"status IN ('received','preparing','ready')";
+   const arrVisible = await pool.query(`SELECT id,customer_name,customer_email,customer_phone,status,total_cents,created_at,updated_at FROM orders WHERE ${strBucketWhere} ORDER BY id DESC LIMIT 500`);
+   for (const objOrder of arrVisible) {
+    objOrder.items = await pool.query('SELECT kind,description,quantity,unit_price_cents FROM order_items WHERE order_id=? ORDER BY id',[objOrder.id]);
+    objOrder.needsAttention=orderAttention(objOrder);
+   }
+   return send(res,200,arrVisible);
+  }
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics') {
+   try {return send(res,200,buildSyntheticAnalytics(url.searchParams.get('view') || 'today'));}
+   catch {return send(res,400,{error:'Choose a supported analytics view.'});}
+  }
+  if (req.method==='GET' && url.pathname==='/admin-model.js') {
+   const strSource=await readFile(new URL('./admin-model.js',import.meta.url));
+   res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(strSource);
   }
   if (req.method==='GET' && url.pathname==='/api/admin/customers') {
    const q=(url.searchParams.get('q') || '').slice(0,100);
@@ -90,8 +125,41 @@ const server = http.createServer(async(req,res)=>{
    if (!Object.hasOwn(allowedTransitions,status)) return send(res,400,{error:'Invalid status'});
    const from=Object.keys(allowedTransitions).filter(s=>allowedTransitions[s].includes(status));
    if (!from.length) return send(res,409,{error:'Invalid status transition'});
-   const result=await pool.query(`UPDATE orders SET status=? WHERE id=? AND status IN (${from.map(()=>'?').join(',')})`,[status,match[1],...from]);
-   return send(res,result.affectedRows?200:409,result.affectedRows?{status}:{error:'Order changed or transition is not allowed. Refresh the queue.'});
+   const conn=await pool.getConnection();
+   try {
+    await conn.beginTransaction();
+    const [objOrder]=await conn.query('SELECT status FROM orders WHERE id=? FOR UPDATE',[match[1]]);
+    if(!objOrder){await conn.rollback();return send(res,404,{error:'Order not found.'});}
+    if(!canTransitionStatus(objOrder.status,status)){await conn.rollback();return send(res,409,{error:'Order changed or transition is not allowed. Refresh the queue.'});}
+    await conn.query('UPDATE orders SET status=? WHERE id=?',[status,match[1]]);
+    await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(?,?,'status_changed',?,?,?)",[match[1],(await resolveIdentity(req))?.email || 'staff',objOrder.status,status,`Status changed to ${status}`]);
+    await conn.commit();
+    return send(res,200,{status});
+   }catch(error){await conn.rollback();throw error;}finally{conn.release();}
+  }
+  const editMatch=url.pathname.match(/^\/api\/admin\/orders\/(\d+)\/items$/);
+  if(req.method==='PATCH' && editMatch){
+   let payload;
+   try{payload=await body(req);}catch{return send(res,400,{error:'Invalid JSON'});}
+   const conn=await pool.getConnection();
+   try{
+    await conn.beginTransaction();
+    const [objOrder]=await conn.query('SELECT status FROM orders WHERE id=? FOR UPDATE',[editMatch[1]]);
+    if(!objOrder){await conn.rollback();return send(res,404,{error:'Order not found.'});}
+    if(!['received','preparing','ready'].includes(objOrder.status)){await conn.rollback();return send(res,409,{error:'Only active orders can be edited.'});}
+    const arrMenu=await conn.query('SELECT category,name,price_cents FROM menu_prices');
+    let arrItems;
+    try{arrItems=normalizeEditableItems(payload.items,new Map(arrMenu.map(objRow=>[`${objRow.category}:${objRow.name}`,objRow.price_cents])));}catch(error){await conn.rollback();return send(res,400,{error:error.message});}
+    if(!arrItems.length || arrItems.length>40){await conn.rollback();return send(res,400,{error:'An edited order must contain 1 to 40 valid items.'});}
+    const nTotal=arrItems.reduce((nSum,objItem)=>nSum+objItem.quantity*objItem.unit,0);
+    if(!Number.isSafeInteger(nTotal)||nTotal>4294967295){await conn.rollback();return send(res,400,{error:'Edited order total is too large.'});}
+    await conn.query('DELETE FROM order_items WHERE order_id=?',[editMatch[1]]);
+    for(const objItem of arrItems) await conn.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[editMatch[1],objItem.kind,objItem.description,objItem.quantity,objItem.unit]);
+    await conn.query('UPDATE orders SET total_cents=? WHERE id=?',[nTotal,editMatch[1]]);
+    await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(?,?,'items_edited',?,?,?)",[editMatch[1],(await resolveIdentity(req))?.email || 'staff',objOrder.status,objOrder.status,`Order items and total updated to ${nTotal} cents`]);
+    await conn.commit();
+    return send(res,200,{items:arrItems,totalCents:nTotal});
+   }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
   const pages={'/':'index.html','/admin':'admin.html'};
   if (req.method==='GET' && pages[url.pathname]) {

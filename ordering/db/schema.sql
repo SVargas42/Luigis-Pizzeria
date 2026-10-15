@@ -48,3 +48,15 @@ CREATE TABLE IF NOT EXISTS order_items (
  CONSTRAINT item_order FOREIGN KEY(order_id) REFERENCES orders(id),
  CONSTRAINT quantity_positive CHECK(quantity BETWEEN 1 AND 10)
 ) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS order_events (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ order_id BIGINT UNSIGNED NOT NULL,
+ actor_email VARCHAR(254) NULL,
+ event_type ENUM('created','status_changed','items_edited') NOT NULL,
+ from_status ENUM('received','preparing','ready','completed','cancelled') NULL,
+ to_status ENUM('received','preparing','ready','completed','cancelled') NULL,
+ details VARCHAR(500) NOT NULL DEFAULT '',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY order_event_history(order_id,created_at),
+ CONSTRAINT event_order FOREIGN KEY(order_id) REFERENCES orders(id)
+) ENGINE=InnoDB;

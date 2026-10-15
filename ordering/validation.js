@@ -32,3 +32,48 @@ export function validateOrder(objBody, mapMenu) {
  if(!Number.isSafeInteger(nTotal) || nTotal>4294967295) failValidation();
  return {customer:{firstName:objCustomer.firstName.trim(),lastName:objCustomer.lastName.trim(),email:objCustomer.email.trim().toLowerCase(),phone:objCustomer.phone.trim()},items:arrItems,total:nTotal};
 }
+
+export function normalizeEditableItems(arrItems, mapMenu) {
+ if(!Array.isArray(arrItems)) throw new Error('Choose valid order items.');
+ const getPrice=(strKind,strName)=>{
+  const nPrice=mapMenu.get(`${strKind}:${strName}`);
+  if(!Number.isSafeInteger(nPrice)||nPrice<0) throw new Error('One or more items are not on the current menu.');
+  return nPrice;
+ };
+ const getQuantity=nQuantity=>{
+  if(!Number.isInteger(nQuantity)||nQuantity<1||nQuantity>10) throw new Error('Item quantity must be between 1 and 10.');
+  return nQuantity;
+ };
+ return arrItems.map(objItem=>{
+  if(!objItem||typeof objItem.description!=='string'||objItem.description.length>200) throw new Error('Enter a valid item description.');
+  const strDescription=objItem.description.trim();
+  const nQuantity=getQuantity(objItem.quantity);
+  if(objItem.kind==='pizza'){
+   const objMatch=strDescription.match(/^(Small|Medium|Large) pizza(?: with ([A-Za-z ,]+))?$/i);
+   if(!objMatch) throw new Error('Pizza format: Medium pizza with Cheese, Pepperoni.');
+   const strSize=objMatch[1][0].toUpperCase()+objMatch[1].slice(1).toLowerCase();
+   const arrToppings=objMatch[2]?objMatch[2].split(',').map(strName=>strName.trim()):[];
+   if(nQuantity!==1||arrToppings.length>6||new Set(arrToppings.map(strName=>strName.toLowerCase())).size!==arrToppings.length) throw new Error('Each edited pizza must be one pizza with unique toppings.');
+   const arrNormalized=arrToppings.map(strName=>{
+    const strNameOnMenu=['Cheese','Pepperoni','Sausage','Pineapple','Olives','Barbeque Chicken'].find(strMenuName=>strMenuName.toLowerCase()===strName.toLowerCase());
+    if(!strNameOnMenu) throw new Error('One or more toppings are not on the menu.');
+    getPrice('topping',strNameOnMenu);
+    return strNameOnMenu;
+   });
+   const strFinal=`${strSize} pizza${arrNormalized.length?' with '+arrNormalized.join(', '):''}`;
+   return {kind:'pizza',description:strFinal,quantity:1,unit:getPrice('pizza',strSize)+arrNormalized.reduce((nSum,strName)=>nSum+getPrice('topping',strName),0)};
+  }
+  if(objItem.kind==='side'){
+   if(!['Breadsticks','Pizza Bites'].includes(strDescription)) throw new Error('Choose Breadsticks or Pizza Bites for a side.');
+   return {kind:'side',description:strDescription,quantity:nQuantity,unit:getPrice('side',strDescription)};
+  }
+  if(objItem.kind==='drink'){
+   const objMatch=strDescription.match(/^(Coke|Pepsi|Dr Pepper|Water) \((Small|Medium|Large)\)$/i);
+   if(!objMatch) throw new Error('Drink format: Dr Pepper (Large).');
+   const strDrink=['Coke','Pepsi','Dr Pepper','Water'].find(strName=>strName.toLowerCase()===objMatch[1].toLowerCase());
+   const strSize=['Small','Medium','Large'].find(strName=>strName.toLowerCase()===objMatch[2].toLowerCase());
+   return {kind:'drink',description:`${strDrink} (${strSize})`,quantity:nQuantity,unit:getPrice('drink',strSize)};
+  }
+  throw new Error('Choose pizza, side, or drink for every order item.');
+ });
+}

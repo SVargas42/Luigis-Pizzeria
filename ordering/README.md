@@ -1,6 +1,6 @@
 # Luigi’s MariaDB ordering system
 
-The supplied pizza interface is connected to a Node.js API and MariaDB. The unrelated existing site in the parent directory is preserved. Customers order from a browser on Debian or another device; staff use `/admin` to view the latest 100 orders, change preparation status, and search customer records. Checkout is pickup with payment at the counter. No email is sent automatically.
+The supplied pizza interface is connected to a Node.js API and MariaDB. Customers can check out as guests; sign-in and account creation remain a teammate-owned integration. Staff use `/admin` for current and past orders, order edits, synthetic analytics, and customer search. Checkout is pickup with payment at the counter. No email is sent automatically.
 
 ## Debian installation
 
@@ -22,12 +22,15 @@ In the MariaDB console, create a restricted runtime account with a real unique p
 CREATE USER 'luigis_app'@'127.0.0.1' IDENTIFIED BY 'YOUR_LONG_RANDOM_PASSWORD';
 GRANT SELECT, INSERT, UPDATE ON luigis.customers TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT, INSERT, UPDATE ON luigis.orders TO 'luigis_app'@'127.0.0.1';
-GRANT SELECT, INSERT ON luigis.order_items TO 'luigis_app'@'127.0.0.1';
+GRANT SELECT, INSERT, DELETE ON luigis.order_items TO 'luigis_app'@'127.0.0.1';
+GRANT SELECT, INSERT ON luigis.order_events TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT ON luigis.menu_prices TO 'luigis_app'@'127.0.0.1';
 EXIT;
 ```
 
 For a local trial, copy `.env.example` to `.env`, set the database and staff passwords, then run `npm start`. Open `http://localhost:3000` and `http://localhost:3000/admin`. The browser asks for the staff username/password. Node is bound to localhost by default. Access a remote trial through an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 your-server`) and use localhost in your browser. Keep `.env` private and out of version control.
+
+For an existing database, apply the current schema again to create the new `order_events` audit table (`CREATE TABLE IF NOT EXISTS` is used), then grant the app `SELECT, INSERT` on `luigis.order_events` and `DELETE` on `luigis.order_items` for staff item edits.
 
 For a persistent service:
 
@@ -46,9 +49,11 @@ Set real passwords in `/etc/luigis.env`; systemd reads that protected file. Ensu
 
 ## Data and operation
 
-`customers` stores names, email, optional phone, and timestamps. Matching normalized email addresses reuse a customer record; this is a contact directory, not verified customer accounts. `orders` stores an immutable customer-contact snapshot, retry key, status, and total. `order_items` stores item descriptions, quantities, and original prices. Foreign keys link these records. Indexed email, customer history, and status/date columns support lookup and future reporting.
+`customers` stores names, email, optional phone, and timestamps. Matching normalized email addresses reuse a customer record; this is a contact directory, not verified customer accounts. `orders` stores a customer-contact snapshot, retry key, status, and total. `order_items` stores item descriptions, quantities, and original prices. `order_events` records order creation, staff status changes, and staff item edits. Foreign keys link these records. Indexed email, customer history, and status/date columns support lookup and future reporting.
 
-Customer and order inserts commit together or roll back together. Parameterized queries protect customer data. A browser-generated random retry key returns the original receipt if a submission is retried. Prices come from MariaDB and totals use integer cents. Prices in receipts remain unchanged when menu prices change. There are no public customer-list or order-history endpoints. Staff pages use text nodes to display customer input.
+Customer and order inserts commit together or roll back together. Parameterized queries protect customer data. A browser-generated random retry key returns the original receipt if a submission is retried. Prices come from MariaDB and totals use integer cents. Prices in receipts remain unchanged when menu prices change. `GET /api/orders/mine` requires the verified identity resolver and returns only orders associated with its verified email; no public customer-list or order-history endpoints exist. Staff pages use text nodes to display customer input.
+
+See [AUTH_INTEGRATION.md](./AUTH_INTEGRATION.md) for the browser and server handoff contract. Authentication is intentionally not implemented in this project yet; until the teammate-owned provider is connected, guest checkout works and account buttons explain the pending integration.
 
 Update menu prices with an administrator database account, for example:
 
@@ -58,7 +63,7 @@ UPDATE luigis.menu_prices SET price_cents = 1800 WHERE category='pizza' AND name
 
 Refresh the ordering page after price changes. All topping prices must remain equal because the supplied interface displays a single topping price. The backend uses the actual individual price for each topping. Menu names and drink choices are currently tied to the supplied pizza interface.
 
-Statuses progress from received → preparing → ready → completed; received, preparing, and ready orders can be cancelled. Closed orders cannot be reopened. The staff queue refreshes manually. Pickup estimates are the supplied static 30–45 minutes; actual capacity, tax rules, business hours enforcement, delivery, online payment, notifications, customer login, and historical paper-record import require business-specific configuration before rollout. No card fields or card data storage are included.
+Statuses progress from received → preparing → ready → completed; received, preparing, and ready orders can be cancelled. Closed orders cannot be reopened. Staff can edit menu-valid items and quantities for received/preparing orders; totals are recalculated against database prices. The current/past split follows explicit order status, never age. Active orders older than 45 minutes are flagged for a staff check but are not automatically advanced. Analytics charts are labeled synthetic preview data and never write sample values to the order database. Actual sales analytics, capacity, tax rules, business-hours enforcement, delivery, online payment, notifications, customer login, and historical paper-record import require business-specific configuration before rollout. No card fields or card data storage are included.
 
 ## Verification and backups
 

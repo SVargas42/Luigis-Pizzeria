@@ -1,11 +1,209 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Luigi’s staff desk</title>
-<style>body{font:16px system-ui;background:#fbf7ef;color:#292720;margin:0;padding:24px}main{max-width:1150px;margin:auto}h1{color:#a92d25}button,input,select{font:inherit;padding:10px;border:1px solid #756d61;border-radius:6px}button{cursor:pointer;background:#fff}article{background:white;border:1px solid #ddd;padding:20px;border-radius:12px;margin:15px 0}table{border-collapse:collapse;width:100%;background:white}td,th{text-align:left;padding:12px;border-bottom:1px solid #ddd}.scroll{overflow:auto}#message{color:#85221d}a{color:#85221d}</style>
-<main><h1>Luigi’s staff desk</h1><p>Pickup orders · Payment collected at pickup</p><button id="refresh">Refresh orders</button> <a href="/">Customer ordering</a><p id="message" role="status"></p><section id="orders" aria-label="Order queue"></section><h2>Customer directory</h2><form id="search"><label for="query">Search by email or last name</label> <input id="query" maxlength="100"><button>Search</button></form><p>Most recent 100 matching customers. Customer information is for fulfilling orders.</p><div class="scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Orders</th><th>Order value</th><th>Last order</th></tr></thead><tbody id="customers"></tbody></table></div></main>
-<script>
-const $=id=>document.getElementById(id),money=n=>'$'+(Number(n)/100).toFixed(2);
-async function api(path,options){const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw Error(data.error);return data}
-const transitions={received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
-async function refresh(){try{const orders=await api('/api/admin/orders');$('orders').replaceChildren();for(const o of orders){const card=document.createElement('article'),title=document.createElement('h2'),detail=document.createElement('p'),list=document.createElement('ul');title.textContent=`LP-${o.id} · ${o.status} · ${money(o.total_cents)}`;detail.textContent=`${o.customer_name} · ${o.customer_email} · ${o.customer_phone || 'No phone'} · ${new Date(o.created_at).toLocaleString()}`;for(const i of o.items){const li=document.createElement('li');li.textContent=`${i.quantity} × ${i.description}`;list.append(li)}card.append(title,detail,list);for(const status of transitions[o.status]){const b=document.createElement('button');b.textContent='Mark '+status;b.onclick=async()=>{b.disabled=true;try{await api('/api/admin/orders/'+o.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});await refresh()}catch(e){$('message').textContent=e.message;b.disabled=false}};card.append(b,document.createTextNode(' '))}$('orders').append(card)}if(!orders.length)$('orders').textContent='No orders yet.';$('message').textContent='Queue updated. Showing latest 100 orders.'}catch(e){$('message').textContent=e.message}}
-async function customers(){try{const rows=await api('/api/admin/customers?q='+encodeURIComponent($('query').value));$('customers').replaceChildren();for(const c of rows){const row=document.createElement('tr');for(const value of [`${c.first_name} ${c.last_name}`,c.email,c.phone,c.order_count,money(c.total_cents),c.last_order?new Date(c.last_order).toLocaleString():'—']){const td=document.createElement('td');td.textContent=value;row.append(td)}$('customers').append(row)}}catch(e){$('message').textContent=e.message}}
-$('refresh').onclick=refresh;$('search').onsubmit=e=>{e.preventDefault();customers()};refresh();customers();
-</script></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Luigi’s staff desk</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#292720;background:#f8f4eb;font-synthesis:none;--tomato:#9e342b;--basil:#315e43;--ink:#292720;--muted:#6d685f;--line:#e6dece;--cream:#fffdf8;--warning:#8c4e08}
+    *{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #286ca5;outline-offset:2px}
+    header{background:var(--cream);border-bottom:1px solid var(--line);padding:18px max(22px,calc((100vw - 1180px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}header a{color:var(--tomato);font-weight:700}h1,h2,h3,p{margin-top:0}h1{font-family:Georgia,serif;color:var(--tomato);font-size:clamp(1.8rem,4vw,2.5rem);margin:0}main{max-width:1180px;margin:0 auto;padding:30px 22px 60px}.intro{color:var(--muted);margin:8px 0 22px}.tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:20px}.tab{border:0;background:transparent;padding:12px 16px;color:#555044;border-bottom:3px solid transparent;font-weight:700}.tab[aria-selected=true]{color:var(--tomato);border-color:var(--tomato)}.panel{display:none}.panel.active{display:block}.toolbar{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}.toolbar p{margin:0;color:var(--muted)}.btn{border:1px solid #bdb4a4;background:white;border-radius:9px;padding:10px 15px;color:var(--ink);font-weight:650}.btn:hover{background:#f4eee1}.btn-primary{background:var(--tomato);border-color:var(--tomato);color:white}.btn-primary:hover{background:#82271f}.btn-green{background:var(--basil);border-color:var(--basil);color:white}.btn-small{padding:7px 10px;font-size:.9rem}.message{min-height:1.5em;color:var(--basil);margin:0 0 12px}.message.error{color:var(--tomato)}.order-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:14px}.order-card,.box,.metric{background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:18px}.order-card h3{margin:0;color:var(--tomato);font-size:1.13rem}.order-top{display:flex;justify-content:space-between;align-items:start;gap:10px}.badge{display:inline-flex;border-radius:30px;padding:5px 10px;background:#e8efe5;color:#315e43;font-weight:700;font-size:.78rem;text-transform:capitalize}.badge.warning{background:#fff0d2;color:var(--warning)}.order-meta,.items{color:var(--muted);font-size:.92rem;line-height:1.55}.items{margin:12px 0;padding-left:20px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.empty{background:var(--cream);border:1px dashed #cfc5b5;padding:26px;border-radius:12px;color:var(--muted)}.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin:16px 0}.metric-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}.metric strong{display:block;color:var(--basil);font:700 2rem Georgia,serif;margin-top:7px}.demo-note{background:#fff0d2;color:#614414;border:1px solid #e6d1a4;border-radius:10px;padding:12px 15px}.chart-box{background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:14px}.chart-box h3{margin:0 0 4px}.chart-note{color:var(--muted);font-size:.9rem}.chart{height:240px;display:flex;align-items:end;gap:clamp(4px,1.2vw,14px);overflow-x:auto;padding:14px 4px 0;border-bottom:1px solid var(--line)}.bar-wrap{flex:1;min-width:32px;height:100%;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:5px}.bar-value{font-size:.75rem;color:var(--muted)}.bar{width:min(38px,80%);min-height:2px;background:linear-gradient(180deg,#8dba8f,var(--basil));border-radius:6px 6px 0 0}.bar-label{font-size:.7rem;color:var(--muted);text-align:center;white-space:nowrap;min-height:1.2em}.chart-table{border-collapse:collapse;width:100%;margin-top:14px}.chart-table caption{text-align:left;font-weight:700;padding:8px 0}.chart-table th,.chart-table td{text-align:left;padding:9px;border-bottom:1px solid var(--line)}.chart-table th:last-child,.chart-table td:last-child{text-align:right}.search-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.search-row input{min-width:min(100%,300px)}input,textarea,select{border:1px solid #a9a193;border-radius:8px;padding:9px 11px;background:white;color:var(--ink)}.table-scroll{overflow:auto;background:white;border:1px solid var(--line);border-radius:12px}.table-scroll table{border-collapse:collapse;width:100%;min-width:760px}.table-scroll th,.table-scroll td{padding:11px;text-align:left;border-bottom:1px solid var(--line)}.table-scroll th{background:#f7f1e5}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}dialog{width:min(680px,calc(100vw - 28px));border:1px solid var(--line);border-radius:16px;padding:0;background:var(--cream);color:var(--ink);box-shadow:0 22px 70px #251b2040}dialog::backdrop{background:#201d18a8}.dialog-inner{padding:22px}.dialog-inner h2{font-family:Georgia,serif;color:var(--tomato)}.dialog-inner textarea{width:100%;min-height:180px;resize:vertical;font-family:ui-monospace,monospace;font-size:.9rem}.hint{font-size:.88rem;color:var(--muted);line-height:1.5}.dialog-actions{display:flex;justify-content:end;gap:8px;margin-top:14px}.sr-status{min-height:1.4em;color:var(--tomato)}
+    @media(max-width:600px){header{padding:15px 18px}main{padding:22px 14px 44px}.tab{padding:10px 9px;font-size:.92rem}.order-card{padding:15px}.chart-box{padding:14px}.chart{height:190px}}
+  </style>
+</head>
+<body>
+  <header><div><h1>Luigi’s staff desk</h1><p class="intro">Pickup orders · Payment collected at pickup</p></div><a href="/">Customer ordering</a></header>
+  <main>
+    <p class="message" id="message" role="status" aria-live="polite"></p>
+    <div class="tabs" role="tablist" aria-label="Staff workspace">
+      <button class="tab" role="tab" id="tab-current" aria-controls="panel-current" aria-selected="true" tabindex="0" data-panel="current">Current Orders</button>
+      <button class="tab" role="tab" id="tab-past" aria-controls="panel-past" aria-selected="false" tabindex="-1" data-panel="past">Past Orders</button>
+      <button class="tab" role="tab" id="tab-analytics" aria-controls="panel-analytics" aria-selected="false" tabindex="-1" data-panel="analytics">Analytics</button>
+      <button class="tab" role="tab" id="tab-customers" aria-controls="panel-customers" aria-selected="false" tabindex="-1" data-panel="customers">Customers</button>
+    </div>
+    <section class="panel active" role="tabpanel" id="panel-current" aria-labelledby="tab-current" tabindex="0">
+      <div class="toolbar"><div><h2>Current Orders</h2><p>Orders stay current until staff marks them picked up or cancelled.</p></div><button class="btn" type="button" data-refresh="current">Refresh orders</button></div>
+      <div class="order-grid" id="current-orders" aria-live="polite"></div>
+    </section>
+    <section class="panel" role="tabpanel" id="panel-past" aria-labelledby="tab-past" tabindex="0" hidden>
+      <div class="toolbar"><div><h2>Past Orders</h2><p>Completed and cancelled orders, newest first.</p></div><button class="btn" type="button" data-refresh="past">Refresh orders</button></div>
+      <div class="order-grid" id="past-orders" aria-live="polite"></div>
+    </section>
+    <section class="panel" role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics" tabindex="0" hidden>
+      <div class="toolbar"><div><h2>Analytics dashboard</h2><p>Preview the dashboard layout using clearly labeled synthetic data.</p></div><label for="analytics-view">Analytics type <select id="analytics-view"><option value="today">Pizzas today</option><option value="comparison">Yesterday vs today</option><option value="weekdays">Weekday averages</option><option value="average">Daily average</option><option value="monthly">Monthly totals</option></select></label></div>
+      <p class="demo-note"><strong>Sample data only.</strong> These charts are simulated for layout review and do not represent real Luigi’s Pizza sales.</p>
+      <div id="analytics-content" aria-live="polite"></div>
+    </section>
+    <section class="panel" role="tabpanel" id="panel-customers" aria-labelledby="tab-customers" tabindex="0" hidden>
+      <div class="toolbar"><div><h2>Customer directory</h2><p>Search customers by email or last name. Use this information only to fulfill orders.</p></div></div>
+      <form class="search-row" id="search"><label for="query">Search customers</label><input id="query" maxlength="100" autocomplete="off" placeholder="Email or last name"><button class="btn btn-primary" type="submit">Search</button></form>
+      <div class="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Orders</th><th scope="col">Order value</th><th scope="col">Last order</th></tr></thead><tbody id="customers"></tbody></table></div>
+    </section>
+  </main>
+  <dialog id="edit-dialog" aria-labelledby="edit-title" aria-describedby="edit-help"><form method="dialog" class="dialog-inner" id="edit-form"><h2 id="edit-title">Edit order</h2><p id="edit-help" class="hint">Update one item per line using <code>kind | item description | quantity</code>. The server checks items against today’s menu and recalculates the total.</p><p class="hint">Examples: <code>pizza | Large pizza with Cheese, Pepperoni | 1</code>, <code>side | Breadsticks | 2</code>, or <code>drink | Dr Pepper (Large) | 1</code>.</p><label for="edit-items">Order items</label><textarea id="edit-items" spellcheck="false" required></textarea><p class="sr-status" id="edit-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" type="button" id="cancel-edit">Cancel</button><button class="btn btn-primary" type="submit" id="save-edit">Save order changes</button></div></form></dialog>
+  <script type="module">
+    import {parseEditedItems} from '/admin-model.js';
+    const $ = strId => document.getElementById(strId);
+    const money = nCents => '$' + (Number(nCents) / 100).toFixed(2);
+    const objStatusLabels = {received:'Order received',preparing:'Being prepared',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
+    const objNextStatuses = {received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
+    let nEditingOrderId = null;
+
+    async function api(strPath,objOptions={}) {
+      const objResponse = await fetch(strPath,objOptions);
+      const objData = await objResponse.json();
+      if(!objResponse.ok) throw new Error(objData.error || 'The request could not be completed.');
+      return objData;
+    }
+
+    function announce(strText,bError=false) {
+      $('message').textContent=strText;
+      $('message').classList.toggle('error',bError);
+    }
+
+    function formatDate(strDate) {
+      const objDate=new Date(strDate);
+      return Number.isNaN(objDate.getTime())?'Time unavailable':objDate.toLocaleString();
+    }
+
+    function textElement(strTag,strText,strClass='') {
+      const objElement=document.createElement(strTag);
+      objElement.textContent=strText;
+      if(strClass)objElement.className=strClass;
+      return objElement;
+    }
+
+    function renderOrder(objOrder,strBucket) {
+      const objCard=document.createElement('article');objCard.className='order-card';
+      const objTop=document.createElement('div');objTop.className='order-top';
+      objTop.append(textElement('h3',`LP-${objOrder.id} · ${money(objOrder.total_cents)}`));
+      objTop.append(textElement('span',objStatusLabels[objOrder.status]||objOrder.status,'badge'+(objOrder.needsAttention?' warning':'')));
+      const objMeta=textElement('p',`${objOrder.customer_name} · ${objOrder.customer_email}${objOrder.customer_phone?' · '+objOrder.customer_phone:''}`,'order-meta');
+      const objPlaced=textElement('p',`Placed ${formatDate(objOrder.created_at)} · Last updated ${formatDate(objOrder.updated_at)}`,'order-meta');
+      const objItems=document.createElement('ul');objItems.className='items';
+      for(const objItem of objOrder.items||[])objItems.append(textElement('li',`${objItem.quantity} × ${objItem.description} · ${money(objItem.unit_price_cents*objItem.quantity)}`));
+      objCard.append(objTop,objMeta,objPlaced,objItems);
+      if(objOrder.needsAttention)objCard.append(textElement('p','This order has been active for 45 minutes or more. Check its status with the customer and staff.','demo-note'));
+      if(strBucket==='current'){
+        const objActions=document.createElement('div');objActions.className='actions';
+        for(const strStatus of objNextStatuses[objOrder.status]||[]){
+          const objButton=textElement('button',strStatus==='completed'?'Mark picked up':`Mark ${objStatusLabels[strStatus].toLowerCase()}`,'btn btn-small'+(strStatus==='ready'?' btn-green':''));
+          objButton.type='button';objButton.addEventListener('click',()=>changeStatus(objOrder,objButton,strStatus));objActions.append(objButton);
+        }
+        if(['received','preparing','ready'].includes(objOrder.status)){
+          const objEdit=textElement('button','Edit items','btn btn-small');objEdit.type='button';objEdit.addEventListener('click',()=>openEditor(objOrder));objActions.append(objEdit);
+        }
+        objCard.append(objActions);
+      }
+      return objCard;
+    }
+
+    async function loadOrders(strBucket) {
+      const strContainer=strBucket==='past'?'past-orders':'current-orders';
+      const objContainer=$(strContainer);objContainer.replaceChildren();
+      try{
+        const arrOrders=await api(`/api/admin/orders?bucket=${strBucket}`);
+        if(!arrOrders.length)objContainer.append(textElement('p',strBucket==='past'?'No completed or cancelled orders yet.':'No current orders. New orders will appear here.','empty'));
+        else for(const objOrder of arrOrders)objContainer.append(renderOrder(objOrder,strBucket));
+        announce(`${arrOrders.length} ${strBucket} order${arrOrders.length===1?'':'s'} loaded.`);
+      }catch(error){objContainer.append(textElement('p',error.message,'empty'));announce(error.message,true);}
+    }
+
+    async function changeStatus(objOrder,objButton,strStatus) {
+      objButton.disabled=true;
+      try{await api(`/api/admin/orders/${objOrder.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:strStatus})});await Promise.all([loadOrders('current'),loadOrders('past')]);}
+      catch(error){announce(error.message,true);objButton.disabled=false;}
+    }
+
+    function openEditor(objOrder) {
+      nEditingOrderId=objOrder.id;
+      $('edit-title').textContent=`Edit order LP-${objOrder.id}`;
+      $('edit-items').value=(objOrder.items||[]).map(objItem=>`${objItem.kind} | ${objItem.description} | ${objItem.quantity}`).join('\n');
+      $('edit-message').textContent='';$('edit-dialog').showModal();$('edit-items').focus();
+    }
+
+    $('edit-form').addEventListener('submit',async objEvent=>{
+      objEvent.preventDefault();$('edit-message').textContent='';$('save-edit').disabled=true;
+      try{
+        const arrItems=parseEditedItems($('edit-items').value);
+        await api(`/api/admin/orders/${nEditingOrderId}/items`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:arrItems})});
+        $('edit-dialog').close();await loadOrders('current');announce(`Order LP-${nEditingOrderId} updated. The total was recalculated.`);
+      }catch(error){$('edit-message').textContent=error.message;}
+      finally{$('save-edit').disabled=false;}
+    });
+    $('cancel-edit').addEventListener('click',()=>$('edit-dialog').close());
+
+    function setTab(objTab) {
+      for(const objButton of document.querySelectorAll('[role="tab"]')){
+        const bSelected=objButton===objTab;
+        objButton.setAttribute('aria-selected',String(bSelected));objButton.tabIndex=bSelected?0:-1;
+        const objPanel=$(`panel-${objButton.dataset.panel}`);objPanel.hidden=!bSelected;objPanel.classList.toggle('active',bSelected);
+      }
+      if(objTab.dataset.panel==='current')loadOrders('current');
+      if(objTab.dataset.panel==='past')loadOrders('past');
+      if(objTab.dataset.panel==='analytics')loadAnalytics($('analytics-view').value);
+      if(objTab.dataset.panel==='customers')loadCustomers();
+    }
+
+    for(const objButton of document.querySelectorAll('[role="tab"]')){
+      objButton.addEventListener('click',()=>setTab(objButton));
+      objButton.addEventListener('keydown',objEvent=>{
+        const arrTabs=[...document.querySelectorAll('[role="tab"]')];let nIndex=arrTabs.indexOf(objButton);
+        if(objEvent.key==='ArrowRight')nIndex=(nIndex+1)%arrTabs.length;
+        else if(objEvent.key==='ArrowLeft')nIndex=(nIndex+arrTabs.length-1)%arrTabs.length;
+        else if(objEvent.key==='Home')nIndex=0;
+        else if(objEvent.key==='End')nIndex=arrTabs.length-1;
+        else return;
+        objEvent.preventDefault();arrTabs[nIndex].focus();setTab(arrTabs[nIndex]);
+      });
+    }
+    document.querySelectorAll('[data-refresh]').forEach(objButton=>objButton.addEventListener('click',()=>loadOrders(objButton.dataset.refresh)));
+
+    async function loadCustomers() {
+      try{
+        const arrCustomers=await api('/api/admin/customers?q='+encodeURIComponent($('query').value));
+        const objBody=$('customers');objBody.replaceChildren();
+        for(const objCustomer of arrCustomers){
+          const objRow=document.createElement('tr');
+          for(const strValue of [`${objCustomer.first_name} ${objCustomer.last_name}`,objCustomer.email,objCustomer.phone||'—',objCustomer.order_count,money(objCustomer.total_cents),objCustomer.last_order?formatDate(objCustomer.last_order):'—'])objRow.append(textElement('td',strValue));
+          objBody.append(objRow);
+        }
+        if(!arrCustomers.length){const objRow=document.createElement('tr'),objCell=textElement('td','No customers found.');objCell.colSpan=6;objRow.append(objCell);objBody.append(objRow);}
+        announce(`${arrCustomers.length} customers loaded.`);
+      }catch(error){announce(error.message,true);}
+    }
+    $('search').addEventListener('submit',objEvent=>{objEvent.preventDefault();loadCustomers();});
+
+    function renderChart(objData) {
+      const objContent=$('analytics-content');objContent.replaceChildren();
+      const objMetrics=document.createElement('div');objMetrics.className='summary-grid';
+      const objMetric=document.createElement('article');objMetric.className='metric';objMetric.append(textElement('span',objData.metricLabel,'metric-label'),textElement('strong',String(objData.metric)));
+      objMetrics.append(objMetric);objContent.append(objMetrics);
+      const objBox=document.createElement('figure');objBox.className='chart-box';objBox.append(textElement('h3',objData.title),textElement('p',`Synthetic sample values · as of ${objData.asOf}`,'chart-note'));
+      const objBars=document.createElement('div');objBars.className='chart';objBars.setAttribute('aria-hidden','true');
+      const nMaximum=Math.max(1,...objData.points.map(objPoint=>objPoint.value));
+      for(const objPoint of objData.points){
+        const objWrap=document.createElement('div');objWrap.className='bar-wrap';
+        objWrap.append(textElement('span',String(objPoint.value),'bar-value'));
+        const objBar=document.createElement('div');objBar.className='bar';objBar.style.height=`${Math.max(1,(objPoint.value/nMaximum)*100)}%`;objWrap.append(objBar);
+        objWrap.append(textElement('span',objPoint.label.slice(0,11),'bar-label'));objBars.append(objWrap);
+      }
+      const objTable=document.createElement('table');objTable.className='chart-table';
+      const objCaption=document.createElement('caption');objCaption.textContent=`${objData.title} data table`;objTable.append(objCaption);
+      const objHead=document.createElement('thead'),objHeadRow=document.createElement('tr');objHeadRow.append(textElement('th','Period'),textElement('th','Pizzas'));objHead.append(objHeadRow);
+      const objBody=document.createElement('tbody');for(const objPoint of objData.points){const objRow=document.createElement('tr');objRow.append(textElement('th',objPoint.label),textElement('td',String(objPoint.value)));objBody.append(objRow);}
+      objTable.append(objHead,objBody);objBox.append(objBars,objTable);objContent.append(objBox);
+    }
+
+    async function loadAnalytics(strView) {
+      try{renderChart(await api(`/api/admin/analytics?view=${encodeURIComponent(strView)}`));announce('Synthetic analytics preview loaded.');}
+      catch(error){$('analytics-content').replaceChildren(textElement('p',error.message,'empty'));announce(error.message,true);}
+    }
+    $('analytics-view').addEventListener('change',()=>loadAnalytics($('analytics-view').value));
+    const strInitialTab=new URLSearchParams(location.search).get('tab');
+    const objInitialTab=['current','past','analytics','customers'].includes(strInitialTab)?$(`tab-${strInitialTab}`):null;
+    if(objInitialTab)setTab(objInitialTab);else loadOrders('current');
+  </script>
+</body>
+</html>
