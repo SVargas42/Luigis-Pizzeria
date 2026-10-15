@@ -21,6 +21,9 @@ function createHarness(bFail=false) {
  vm.createContext(objContext);vm.runInContext(strScript,objContext);
  return {mapElements,arrRequests,objContext};
 }
+test('admin homepage analytics link opens its separate analytics page',()=>{
+ assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?demo=1&tab=ordering"/);
+});
 test('customer selections reach API and confirmation uses saved database receipt',async()=>{
  const objHarness=createHarness();
  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','1234567890']])objHarness.mapElements.get(strId).value=strValue;
