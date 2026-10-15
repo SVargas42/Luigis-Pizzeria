@@ -82,6 +82,17 @@ test('demo role picker exposes Customer and Admin UI without granting server acc
  assert.equal(objHarness.mapElements.get('firstName').value,'Demo');
  assert.match(objHarness.mapElements.get('auth-message').textContent,/Server data stays protected/);
 });
+test('sign out clears the active role, returns home, and offers sign-in again',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("selectDemoRole('admin')",objHarness.objContext);
+ assert.equal(objHarness.mapElements.get('sign-out').classList.contains('hidden'),false);
+ objHarness.mapElements.get('sign-out').handlers.click();
+ assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);
+ assert.equal(objHarness.mapElements.get('sign-out').classList.contains('hidden'),true);
+ assert.equal(objHarness.mapElements.get('sign-in').classList.contains('hidden'),false);
+ assert.equal(objHarness.mapElements.get('home-page').classList.contains('hidden'),false);
+ assert.match(objHarness.mapElements.get('auth-message').textContent,/signed out/i);
+});
 test('demo order preview never submits customer or admin demo data to the order API',async()=>{
  const objHarness=createHarness();
  vm.runInContext("selectDemoRole('customer')",objHarness.objContext);

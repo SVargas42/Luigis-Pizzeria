@@ -46,7 +46,7 @@
   <header class="topbar">
     <div class="container d-flex align-items-center justify-content-between gap-3 py-3 flex-wrap">
       <a class="brand" href="#home" id="home-link" aria-label="Luigi's Pizza home"><span class="brand-mark">✦</span>Luigi's Pizza</a>
-      <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end"><div class="top-note">Fresh from our oven, straight to your table <span class="ms-2" aria-hidden="true">🍕</span></div><nav class="account-controls" aria-label="Account navigation"><button class="btn btn-outline-secondary" type="button" id="sign-in">Sign in</button><button class="btn btn-outline-secondary" type="button" id="create-account">Create account</button><span class="account-name hidden" id="account-name"></span><button class="btn btn-primary hidden" type="button" id="orders-button">Orders</button><a class="btn btn-outline-secondary hidden" id="admin-analytics-link" href="/admin?tab=analytics">Analytics</a></nav></div>
+      <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end"><div class="top-note">Fresh from our oven, straight to your table <span class="ms-2" aria-hidden="true">🍕</span></div><nav class="account-controls" aria-label="Account navigation"><button class="btn btn-outline-secondary" type="button" id="sign-in">Sign in</button><button class="btn btn-outline-secondary" type="button" id="create-account">Create account</button><span class="account-name hidden" id="account-name"></span><button class="btn btn-primary hidden" type="button" id="orders-button">Orders</button><a class="btn btn-outline-secondary hidden" id="admin-analytics-link" href="/admin?tab=analytics">Analytics</a><button class="btn btn-outline-secondary hidden" type="button" id="sign-out">Sign out</button></nav></div>
     </div>
   </header>
   <div class="container"><p class="account-message" id="auth-message" role="status" aria-live="polite">You can order as a guest. Sign-in and account creation will connect when the authentication work is ready.</p></div>
@@ -147,12 +147,13 @@
         $('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;
         $('sign-in').classList.add('hidden');$('create-account').classList.add('hidden');$('account-name').classList.remove('hidden');$('account-name').textContent=`${state.customer.firstName} ${state.customer.lastName}`.trim()||state.customer.email;
         $('orders-button').classList.remove('hidden');
+        $('sign-out').classList.remove('hidden');
         $('admin-analytics-link').classList.toggle('hidden',objAuthState.user.role!=='admin');
         $('auth-message').textContent=bDemo?`Demo ${objAuthState.user.role} selected. Server data stays protected; this role only previews the site.`:objAuthState.user.role==='admin'?'Staff account signed in. Open Orders to manage the order queue and analytics.':'Signed in. Your name and email are ready for checkout.';
         if(state.step===1&& !$('order-view').classList.contains('hidden'))goTo(2);
       }else{
         state.customer={firstName:'',lastName:'',email:'',phone:''};
-        $('sign-in').classList.remove('hidden');$('create-account').classList.remove('hidden');$('account-name').classList.add('hidden');$('orders-button').classList.add('hidden');$('admin-analytics-link').classList.add('hidden');
+        $('sign-in').classList.remove('hidden');$('create-account').classList.remove('hidden');$('account-name').classList.add('hidden');$('orders-button').classList.add('hidden');$('admin-analytics-link').classList.add('hidden');$('sign-out').classList.add('hidden');
         if(state.step!==1&& !$('order-view').classList.contains('hidden'))goTo(1);
         $('auth-message').textContent=objAuthState.ready?'You can sign in or continue as a guest.':'Sign-in and account creation will connect when the authentication work is ready. Guest ordering is available now.';
       }
@@ -177,6 +178,13 @@
       const objDemoUser=strRole==='admin'?{id:'demo-admin',role:'admin',email:'admin@example.test',firstName:'Demo',lastName:'Admin'}:{id:'demo-customer',role:'customer',email:'customer@example.test',firstName:'Demo',lastName:'Customer'};
       setAuthState({authenticated:true,authReady:true,user:objDemoUser},true);
       $('home-title').focus({preventScroll:true});
+    }
+
+    function signOut(){
+      window.dispatchEvent(new CustomEvent('luigi:auth-request',{detail:{action:'sign-out'}}));
+      setAuthState({authenticated:false,authReady:true});
+      showHome();
+      $('auth-message').textContent='You are signed out. Continue as a guest or sign in with another demo role.';
     }
 
     window.addEventListener('luigi:auth-state',objEvent=>setAuthState(objEvent.detail));
@@ -275,6 +283,7 @@
     ['firstName','lastName','email','phone'].forEach(id=>$(id).addEventListener('input',event=>{if(event.target.classList.contains('is-invalid'))setInvalid(event.target,false)}));
     $('start-order').addEventListener('click',startOrder);
     $('sign-in').addEventListener('click',()=>requestAuthAction('sign-in'));
+    $('sign-out').addEventListener('click',signOut);
     $('demo-role-continue').addEventListener('click',event=>{event.preventDefault();selectDemoRole($('demo-role').value)});
     $('demo-sign-in').addEventListener('close',()=>{if(!$('sign-in').classList.contains('hidden'))$('sign-in').focus({preventScroll:true})});
     $('create-account').addEventListener('click',()=>requestAuthAction('create-account'));
