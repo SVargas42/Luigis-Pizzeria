@@ -29,6 +29,9 @@ async function body(req) {
  for await (const chunk of req) {raw += chunk; if (Buffer.byteLength(raw)>32768) throw new Error('Request too large');}
  return JSON.parse(raw);
 }
+async function rawBody(req) {
+ let strRaw='';for await(const chunk of req){strRaw+=chunk;if(Buffer.byteLength(strRaw)>65536)throw new Error('Request too large');}return strRaw;
+}
 async function createOrder(payload,objIdentity=null,stripeSessionId=null) {
  const conn = await pool.getConnection();
  try {
@@ -67,6 +70,8 @@ async function stripeRequest(path,params=null,method='POST') {
 }
 async function finishPaidCheckout(session) {
  if(session.payment_status!=='paid'||session.currency!=='usd'||!session.metadata?.request_key) throw new Error('Payment is not complete.');
+ const [existing]=await pool.query('SELECT id,total_cents FROM orders WHERE stripe_session_id=?',[session.id]);
+ if(existing){const items=await pool.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[existing.id]);return {orderNumber:`LP-${existing.id}`,orderId:existing.id,totalCents:existing.total_cents,items};}
  const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_session_id=?',[session.metadata.request_key,session.id]);
  if(!pending||Number(session.amount_total)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
  const receipt=await createOrder(JSON.parse(pending.payload_json),null,session.id);
@@ -85,6 +90,17 @@ const server = http.createServer(async(req,res)=>{
   if (req.method==='GET' && url.pathname==='/api/session') {
    const objIdentity=await resolveIdentity(req);
    return send(res,200,{authenticated:Boolean(objIdentity),authReady:identityIsConfigured(),user:objIdentity});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/stripe/webhook'){
+   if(!process.env.STRIPE_WEBHOOK_SECRET)return send(res,503,{error:'Webhook is not configured.'});
+   let strRaw;try{strRaw=await rawBody(req);}catch{return send(res,413,{error:'Webhook request is too large.'});}
+   const arrSignature=(req.headers['stripe-signature']||'').split(',').map(strPart=>strPart.split('='));const strTimestamp=arrSignature.find(([strKey])=>strKey==='t')?.[1];const arrV1=arrSignature.filter(([strKey])=>strKey==='v1').map(([,strValue])=>strValue);
+   const nTimestamp=Number(strTimestamp);if(!Number.isFinite(nTimestamp)||Math.abs(Date.now()/1000-nTimestamp)>300)return send(res,400,{error:'Invalid webhook signature.'});
+   const strExpected=createHmac('sha256',process.env.STRIPE_WEBHOOK_SECRET).update(`${strTimestamp}.${strRaw}`).digest('hex');const bSignatureValid=arrV1.some(strValue=>{try{const supplied=Buffer.from(strValue,'hex'),expected=Buffer.from(strExpected,'hex');return supplied.length===expected.length&&timingSafeEqual(supplied,expected);}catch{return false;}});
+   if(!bSignatureValid)return send(res,400,{error:'Invalid webhook signature.'});
+   let event;try{event=JSON.parse(strRaw);}catch{return send(res,400,{error:'Invalid webhook payload.'});}
+   if(event.type==='checkout.session.completed'&&event.data?.object?.payment_status==='paid'){try{await finishPaidCheckout(event.data.object);}catch{return send(res,500,{error:'Paid order is awaiting processing.'});}}
+   return send(res,200,{received:true});
   }
   if(req.method==='POST'&&url.pathname==='/api/checkout/session'){
    if(!process.env.STRIPE_SECRET_KEY||!process.env.SITE_URL)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
