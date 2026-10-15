@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildSyntheticAnalytics,canTransitionStatus,orderAttention,orderBucket,statusLabel} from '../domain.js';
+import {buildSyntheticAnalytics,buildSyntheticBusinessData,buildSyntheticEmployeeData,buildSyntheticItemComparison,canTransitionStatus,orderAttention,orderBucket,statusLabel} from '../domain.js';
 
 test('current and past order buckets depend on explicit order status, not age',()=>{
  const objOldPending={status:'received',created_at:'2026-10-14T10:00:00.000Z'};
@@ -43,4 +43,27 @@ test('weekday, daily average, and monthly series have plausible date-aligned per
  assert.ok(objMonthly.points.at(-1).value<objMonthly.points.at(-2).value*2);
  assert.equal(statusLabel('ready'),'Ready for pickup');
  assert.throws(()=>buildSyntheticAnalytics('actual-sales',objNow),RangeError);
+});
+
+test('item comparison offers aligned days and months without future labels',()=>{
+ const objNow=new Date('2026-03-01T12:00:00.000Z');
+ const objWeek=buildSyntheticItemComparison('pizza:Small','drink:Pepsi (Large)','week',objNow);
+ const objMonth=buildSyntheticItemComparison('side:Breadsticks','topping:Olives','months',objNow);
+ assert.equal(objWeek.labels.length,7);
+ assert.equal(objWeek.labels.at(-1),'2026-03-01');
+ assert.equal(objMonth.labels.length,6);
+ assert.equal(objMonth.labels.at(-1),'Mar 2026');
+ assert.ok(objWeek.series.every(objSeries=>objSeries.values.length===7&&objSeries.values.every(Number.isInteger)));
+});
+
+test('employee and business reports keep synthetic counts and shifts bounded by current time',()=>{
+ const objBeforeShift=buildSyntheticEmployeeData(new Date('2026-10-12T06:00:00.000Z'));
+ const objAfterShift=buildSyntheticEmployeeData(new Date('2026-10-12T20:00:00.000Z'));
+ const objBusiness=buildSyntheticBusinessData(new Date('2026-10-12T20:00:00.000Z'));
+ assert.ok(objBeforeShift.employees.every(objPerson=>objPerson.hoursToday>=0&&objPerson.hoursToday<=6&&objPerson.ordersToday>=0));
+ assert.ok(objBeforeShift.employees.every(objPerson=>objPerson.hoursThisWeek>=objPerson.hoursToday));
+ assert.ok(objAfterShift.employees.every(objPerson=>objPerson.shiftStatus!=='Upcoming'));
+ assert.equal(objBusiness.weeklySales.length,7);
+ assert.equal(objBusiness.weeklySales.at(-1).label,'2026-10-12');
+ assert.equal(objBusiness.synthetic,true);
 });

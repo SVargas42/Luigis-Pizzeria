@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
 import mariadb from 'mariadb';
 import {normalizeEditableItems,validateOrder} from './validation.js';
-import {buildSyntheticAnalytics,canTransitionStatus,orderAttention} from './domain.js';
+import {buildSyntheticAnalytics,buildSyntheticBusinessData,buildSyntheticEmployeeData,buildSyntheticItemComparison,canTransitionStatus,orderAttention} from './domain.js';
 import {identityIsConfigured,resolveIdentity} from './identity.js';
 import {requiresStaffAuthentication} from './admin-access.js';
 
@@ -111,6 +111,12 @@ const server = http.createServer(async(req,res)=>{
    try {return send(res,200,buildSyntheticAnalytics(url.searchParams.get('view') || 'today'));}
    catch {return send(res,400,{error:'Choose a supported analytics view.'});}
   }
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics/products') {
+   try {return send(res,200,buildSyntheticItemComparison(url.searchParams.get('left')||'pizza:Small',url.searchParams.get('right')||'drink:Dr Pepper (Medium)',url.searchParams.get('period')||'week'));}
+   catch {return send(res,400,{error:'Choose valid products and a supported period.'});}
+  }
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,buildSyntheticEmployeeData());
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,buildSyntheticBusinessData());
   const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js'};
   if (req.method==='GET' && mapBrowserModules[url.pathname]) {
    const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));
@@ -163,7 +169,7 @@ const server = http.createServer(async(req,res)=>{
     return send(res,200,{items:arrItems,totalCents:nTotal});
    }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
-  const pages={'/':'index.html','/admin':'admin.html'};
+  const pages={'/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
   if (req.method==='GET' && pages[url.pathname]) {
    const html=await readFile(new URL(url.pathname==='/'?'../index.html':`./public/${pages[url.pathname]}`,import.meta.url));
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(html);

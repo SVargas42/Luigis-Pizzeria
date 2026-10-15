@@ -60,14 +60,17 @@ test('signed-in customer skips the guest details step and receives the Orders en
  assert.equal(objHarness.mapElements.get('email').value,'ada@example.com');
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),true);
  assert.equal(objHarness.mapElements.get('orders-button').classList.contains('hidden'),false);
+ assert.equal(objHarness.mapElements.get('start-order').textContent,'Place an Order →');
 });
 test('guest checkout keeps its details step and account requests do not authenticate a visitor',()=>{
  const objHarness=createHarness();
+ objHarness.mapElements.get('start-order').textContent='Continue as Guest →';
  objHarness.mapElements.get('sign-in').handlers.click();
  assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);
  assert.equal(objHarness.mapElements.get('auth-message').textContent.includes('continue as a guest'),true);
  objHarness.mapElements.get('start-order').handlers.click();
  assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
+ assert.equal(objHarness.mapElements.get('start-order').textContent,'Continue as Guest →');
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),false);
 });
 test('demo role picker exposes Customer and Admin UI without granting server access',()=>{

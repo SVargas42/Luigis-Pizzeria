@@ -26,6 +26,9 @@ test('demo edits and status changes stay in the local demo state',()=>{
 test('demo workspace includes analytics and only sample customer entries',()=>{
  const objState=createDemoAdminState(objNow);
  assert.equal(handleDemoAdminRequest('/api/admin/analytics?view=today',{},objState,objNow).synthetic,true);
+ assert.equal(handleDemoAdminRequest('/api/admin/analytics/products?left=pizza%3ASmall&right=drink%3APepsi+%28Large%29&period=week',{},objState,objNow).series.length,2);
+ assert.equal(handleDemoAdminRequest('/api/admin/analytics/employees',{},objState,objNow).employees.length,4);
+ assert.equal(handleDemoAdminRequest('/api/admin/analytics/business',{},objState,objNow).synthetic,true);
  const arrCustomers=handleDemoAdminRequest('/api/admin/customers?q=customer',{},objState,objNow);
  assert.deepEqual(arrCustomers.map(objCustomer=>objCustomer.email),['customer@example.test']);
 });

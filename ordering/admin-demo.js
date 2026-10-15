@@ -1,4 +1,4 @@
-import {buildSyntheticAnalytics, canTransitionStatus, orderAttention} from './domain.js';
+import {buildSyntheticAnalytics, buildSyntheticBusinessData, buildSyntheticEmployeeData, buildSyntheticItemComparison, canTransitionStatus, orderAttention} from './domain.js';
 import {normalizeEditableItems} from './validation.js';
 
 const mapMenuPrices = new Map([
@@ -26,6 +26,9 @@ export function handleDemoAdminRequest(strPath, objOptions, objState, objNow = n
     return objState.orders.filter(objOrder => (['completed','cancelled'].includes(objOrder.status)) === (strBucket === 'past')).map(objOrder=>({...objOrder,items:objOrder.items.map(objItem=>({...objItem})),needsAttention:orderAttention(objOrder,objNow)}));
   }
   if (strMethod === 'GET' && objUrl.pathname === '/api/admin/analytics') return buildSyntheticAnalytics(objUrl.searchParams.get('view') || 'today',objNow);
+  if (strMethod === 'GET' && objUrl.pathname === '/api/admin/analytics/products') return buildSyntheticItemComparison(objUrl.searchParams.get('left')||'pizza:Small',objUrl.searchParams.get('right')||'drink:Dr Pepper (Medium)',objUrl.searchParams.get('period')||'week',objNow);
+  if (strMethod === 'GET' && objUrl.pathname === '/api/admin/analytics/employees') return buildSyntheticEmployeeData(objNow);
+  if (strMethod === 'GET' && objUrl.pathname === '/api/admin/analytics/business') return buildSyntheticBusinessData(objNow);
   if (strMethod === 'GET' && objUrl.pathname === '/api/admin/customers') {
     const strQuery=(objUrl.searchParams.get('q')||'').toLowerCase();
     return [

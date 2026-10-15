@@ -97,3 +97,61 @@ export function buildSyntheticAnalytics(strType, objNow = new Date()) {
 
   return {type: strType, title: strTitle, metricLabel: strMetricLabel, metric: nMetric, points: arrPoints, synthetic: true, asOf: dayStamp(objToday)};
 }
+
+function itemFactor(strItemKey) {
+  let nHash=0;
+  for(const strCharacter of strItemKey)nHash=(nHash*31+strCharacter.charCodeAt(0))%997;
+  const strCategory=strItemKey.split(':')[0];
+  const nBase={pizza:.42,drink:.22,side:.13,topping:.2}[strCategory]||.1;
+  return nBase*(.72+(nHash%57)/100);
+}
+
+export function buildSyntheticItemComparison(strLeftKey,strRightKey,strPeriod='week',objNow=new Date()) {
+  const objSeries=strPeriod==='month'?buildSyntheticAnalytics('average',objNow).points:buildSyntheticAnalytics('average',objNow).points.slice(-7);
+  const arrPoints=objSeries.map(objPoint=>({label:objPoint.label,value:objPoint.value}));
+  const objMonth=strPeriod==='months'?buildSyntheticAnalytics('monthly',objNow).points:null;
+  const fnValues=strKey=>{
+    const nFactor=itemFactor(strKey);
+    const arrBase=objMonth?objMonth.map(objPoint=>objPoint.value):arrPoints.map(objPoint=>objPoint.value);
+    return arrBase.map((nBase,nIndex)=>Math.max(0,Math.round(nBase*nFactor*(1+((nIndex*7+strKey.length)%11)/40))));
+  };
+  const arrLabels=objMonth?objMonth.map(objPoint=>objPoint.label):arrPoints.map(objPoint=>objPoint.label);
+  const objToday=buildSyntheticAnalytics('today',objNow);
+  return {
+    synthetic:true,
+    title:`${strLeftKey.replace(':',' · ')} compared with ${strRightKey.replace(':',' · ')}`,
+    period:strPeriod==='months'?'Last 6 months':strPeriod==='month'?'Last 30 days':'Last 7 days',
+    labels:arrLabels,
+    series:[{key:strLeftKey,label:strLeftKey.split(':').slice(1).join(':')||strLeftKey,values:fnValues(strLeftKey)},{key:strRightKey,label:strRightKey.split(':').slice(1).join(':')||strRightKey,values:fnValues(strRightKey)}],
+    asOf:objToday.asOf
+  };
+}
+
+export function buildSyntheticEmployeeData(objNow=new Date()) {
+  const nHour=objNow.getUTCHours()+objNow.getUTCMinutes()/60;
+  const nWeekday=(objNow.getUTCDay()+6)%7;
+  const arrWorkDays=[[0,1,3,4],[1,2,4,5],[0,2,3,5],[0,1,2,3,4]];
+  const arrEmployees=['A','B','C','D'].map((strCode,nIndex)=>{
+    const nStart=8+(nIndex%3)*2,nEnd=nStart+6;
+    const bWorksToday=arrWorkDays[nIndex].includes(nWeekday);
+    const nProgress=bWorksToday?Math.max(0,Math.min(1,(nHour-nStart)/(nEnd-nStart))):0;
+    const nShiftOrders=Math.floor((12+nIndex*3)*nProgress);
+    const nShiftHours=Number((6*nProgress).toFixed(1));
+    const strShiftStatus=!bWorksToday?'Off today':nProgress===0?'Upcoming':nProgress===1?'Completed':'In progress';
+    const nShiftsCompleted=arrWorkDays[nIndex].filter(nDay=>nDay<nWeekday).length;
+    const nHoursThisWeek=nShiftsCompleted*6+nShiftHours;
+    const nOrdersThisWeek=nShiftsCompleted*(12+nIndex*3)+nShiftOrders;
+    return {name:`Demo Employee ${strCode}`,role:['Pizza maker','Order coordinator','Kitchen lead','Delivery prep'][nIndex],shift:bWorksToday?`${String(nStart).padStart(2,'0')}:00–${String(nEnd).padStart(2,'0')}:00 UTC`:'No shift scheduled today',shiftStatus:strShiftStatus,hoursToday:nShiftHours,ordersToday:nShiftOrders,shiftsThisWeek:nShiftsCompleted,hoursThisWeek:Number(nHoursThisWeek.toFixed(1)),ordersThisWeek:nOrdersThisWeek,averagePrepMinutes:14+nIndex*2};
+  });
+  return {synthetic:true,asOf:dayStamp(new Date(Date.UTC(objNow.getUTCFullYear(),objNow.getUTCMonth(),objNow.getUTCDate()))),employees:arrEmployees};
+}
+
+export function buildSyntheticBusinessData(objNow=new Date()) {
+  const objDaily=buildSyntheticAnalytics('average',objNow).points.slice(-7);
+  const nTodayPizzas=buildSyntheticAnalytics('today',objNow).metric;
+  const fnOrders=nPizzas=>Math.max(1,Math.round(nPizzas*.72));
+  const fnSales=nPizzas=>fnOrders(nPizzas)*2650;
+  const arrSales=objDaily.map(objPoint=>({label:objPoint.label,value:fnSales(objPoint.value)}));
+  const nTodayOrders=fnOrders(nTodayPizzas),nTodaySales=fnSales(nTodayPizzas);
+  return {synthetic:true,asOf:buildSyntheticAnalytics('today',objNow).asOf,ordersToday:nTodayOrders,pizzasToday:nTodayPizzas,salesTodayCents:nTodaySales,averageOrderCents:2650,cancellationRate:2.4,weeklySales:arrSales};
+}
