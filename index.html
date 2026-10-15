@@ -39,6 +39,7 @@
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
     .empty-cart{color:var(--muted)}.remove-pizza,.drink-remove{min-height:32px;min-width:44px;color:var(--tomato)!important;padding:4px 8px!important}.form-instructions{font-size:.86rem;color:var(--muted);margin-top:-14px;margin-bottom:18px}
     .form-control,.form-select,.form-check-input{border-color:#756d61}.btn-outline-secondary{--bs-btn-border-color:#756d61}
+    .demo-sign-in{width:min(92vw,460px);border:1px solid var(--line);border-radius:16px;padding:24px;color:var(--ink);box-shadow:0 18px 60px #0004}.demo-sign-in::backdrop{background:#1e1914a8}.demo-sign-in h2{font:700 1.5rem 'Playfair Display',serif}.demo-sign-in p{color:var(--muted);line-height:1.5}
   </style>
 </head>
 <body>
@@ -49,6 +50,14 @@
     </div>
   </header>
   <div class="container"><p class="account-message" id="auth-message" role="status" aria-live="polite">You can order as a guest. Sign-in and account creation will connect when the authentication work is ready.</p></div>
+  <dialog id="demo-sign-in" aria-labelledby="demo-sign-in-title" aria-describedby="demo-sign-in-help" class="demo-sign-in">
+    <form method="dialog" id="demo-role-form"><h2 id="demo-sign-in-title">Choose a demo role</h2>
+      <p id="demo-sign-in-help">Demo roles let you preview the site. They do not authenticate with the server or grant access to protected staff data.</p>
+      <label class="form-label" for="demo-role">Sign in as</label>
+      <select class="form-select mb-3" id="demo-role"><option value="guest">Guest</option><option value="customer">Customer</option><option value="admin">Admin</option></select>
+      <div class="button-row"><button class="btn btn-outline-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="demo-role-continue" value="continue">Continue</button></div>
+    </form>
+  </dialog>
   <main>
     <section class="home-page" id="home-page">
       <div class="container">
@@ -121,24 +130,25 @@
     let toppingChoices = ['Cheese','Pepperoni','Sausage','Pineapple','Olives','Barbeque Chicken'];
     let nextPizzaId=1,nextDrinkId=1, requestKey=null, submitting=false;
     const state = {step:1,customer:{firstName:'',lastName:'',email:'',phone:''},pizzas:[{id:nextPizzaId++,size:null,toppings:[]}],activePizzaId:1,sides:[],drinks:[]};
-    const objAuthState = {user:null,ready:false};
+    const objAuthState = {user:null,ready:false,demo:false};
     const $ = (id) => document.getElementById(id);
     const money = (n) => '$' + n.toFixed(2);
 
-    function setAuthState(objSession){
+    function setAuthState(objSession,bDemo=false){
       const objUser=objSession?.user||objSession;
       const bAuthenticated=Boolean(objSession?.authenticated??(objUser?.email&&objUser?.role));
       objAuthState.user=bAuthenticated&&objUser&&['customer','admin'].includes(objUser.role)?{
         id:objUser.id||objUser.email,email:String(objUser.email||''),firstName:String(objUser.firstName||''),lastName:String(objUser.lastName||''),phone:String(objUser.phone||''),role:objUser.role
       }:null;
       objAuthState.ready=Boolean(objSession?.authReady);
+      objAuthState.demo=bDemo;
       if(objAuthState.user){
         state.customer={firstName:objAuthState.user.firstName,lastName:objAuthState.user.lastName,email:objAuthState.user.email,phone:objAuthState.user.phone};
         $('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;
         $('sign-in').classList.add('hidden');$('create-account').classList.add('hidden');$('account-name').classList.remove('hidden');$('account-name').textContent=`${state.customer.firstName} ${state.customer.lastName}`.trim()||state.customer.email;
         $('orders-button').classList.remove('hidden');
         $('admin-analytics-link').classList.toggle('hidden',objAuthState.user.role!=='admin');
-        $('auth-message').textContent=objAuthState.user.role==='admin'?'Staff account signed in. Open Orders to manage the order queue and analytics.':'Signed in. Your name and email are ready for checkout.';
+        $('auth-message').textContent=bDemo?`Demo ${objAuthState.user.role} selected. Server data stays protected; this role only previews the site.`:objAuthState.user.role==='admin'?'Staff account signed in. Open Orders to manage the order queue and analytics.':'Signed in. Your name and email are ready for checkout.';
         if(state.step===1&& !$('order-view').classList.contains('hidden'))goTo(2);
       }else{
         state.customer={firstName:'',lastName:'',email:'',phone:''};
@@ -152,7 +162,21 @@
     function requestAuthAction(strAction){
       const objRequest=new CustomEvent('luigi:auth-request',{detail:{action:strAction}});
       window.dispatchEvent(objRequest);
-      $('auth-message').textContent=objAuthState.ready?'Opening account access…':'Account access is reserved for the authentication integration. You can continue as a guest.';
+      if(strAction==='sign-in'){$('demo-sign-in').showModal();$('demo-role').focus();$('auth-message').textContent='Choose a demo role to preview the account experience, or continue as a guest.';}
+      else $('auth-message').textContent=objAuthState.ready?'Opening account access…':'Account access is reserved for the authentication integration. You can continue as a guest.';
+    }
+
+    function selectDemoRole(strRole){
+      $('demo-sign-in').close();
+      if(strRole==='guest'){
+        setAuthState({authenticated:false,authReady:true},true);
+        $('auth-message').textContent='Guest mode selected. You can order without an account.';
+        $('home-title').focus({preventScroll:true});
+        return;
+      }
+      const objDemoUser=strRole==='admin'?{id:'demo-admin',role:'admin',email:'admin@example.test',firstName:'Demo',lastName:'Admin'}:{id:'demo-customer',role:'customer',email:'customer@example.test',firstName:'Demo',lastName:'Customer'};
+      setAuthState({authenticated:true,authReady:true,user:objDemoUser},true);
+      $('home-title').focus({preventScroll:true});
     }
 
     window.addEventListener('luigi:auth-state',objEvent=>setAuthState(objEvent.detail));
@@ -236,6 +260,12 @@
     }
     async function loadCustomerOrders(){
       $('customer-orders-panel').classList.remove('hidden');$('customer-orders-error').textContent='Loading your orders…';$('customer-orders-list').replaceChildren();
+      if(objAuthState.demo){
+        const objPlacedAt=new Date(Date.now()-12*60*1000);
+        renderCustomerOrders([{id:'DEMO-2048',total_cents:1600,status:'preparing',created_at:objPlacedAt.toISOString(),items:[{description:'Medium pizza with pepperoni',quantity:1}]}]);
+        $('customer-orders-error').textContent='Demo order preview · synthetic status and timestamp; no customer records were accessed.';
+        return;
+      }
       try{const objResponse=await fetch('/api/orders/mine');const arrOrders=await objResponse.json();if(!objResponse.ok)throw Error(arrOrders.error||'Unable to load orders.');renderCustomerOrders(arrOrders);$('customer-orders-error').textContent='';}
       catch(error){$('customer-orders-error').textContent=error.message||'Unable to load orders.';}
     }
@@ -245,6 +275,8 @@
     ['firstName','lastName','email','phone'].forEach(id=>$(id).addEventListener('input',event=>{if(event.target.classList.contains('is-invalid'))setInvalid(event.target,false)}));
     $('start-order').addEventListener('click',startOrder);
     $('sign-in').addEventListener('click',()=>requestAuthAction('sign-in'));
+    $('demo-role-continue').addEventListener('click',event=>{event.preventDefault();selectDemoRole($('demo-role').value)});
+    $('demo-sign-in').addEventListener('close',()=>{if(!$('sign-in').classList.contains('hidden'))$('sign-in').focus({preventScroll:true})});
     $('create-account').addEventListener('click',()=>requestAuthAction('create-account'));
     $('orders-button').addEventListener('click',showOrders);
     $('portal-place-order').addEventListener('click',startOrder);
@@ -257,6 +289,14 @@
     document.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>{const nTarget=Number(button.dataset.go);if(nTarget===1&&objAuthState.user)showHome();else goTo(nTarget)}));
     $('payment-form').addEventListener('submit',async event=>{
       event.preventDefault();if(submitting)return;submitting=true;$('place-order').disabled=true;$('order-error').textContent='Saving your order…';
+      if(objAuthState.demo){
+        $('order-number').textContent=`DEMO-${String(Date.now()).slice(-6)}`;
+        $('confirm-name').textContent=`${state.customer.firstName} ${state.customer.lastName}`.trim();
+        $('confirm-email').textContent=state.customer.email;
+        $('receipt-lines').innerHTML=summaryMarkup();$('receipt-total').textContent=money(total());
+        $('receipt-details').textContent='Demo pickup · no order was sent to the restaurant.';
+        $('order-error').textContent='';submitting=false;$('place-order').disabled=false;goTo(4);return;
+      }
       requestKey ||= crypto.randomUUID();
       try {
         const response=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks})});

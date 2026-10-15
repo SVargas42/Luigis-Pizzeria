@@ -8,7 +8,7 @@ const strHtml=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 const strScript=strHtml.match(/<script>([\s\S]*?)<\/script>/)[1];
 function createHarness(bFail=false) {
  const mapElements=new Map(),arrRequests=[];
- function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},replaceChildren(){this.children=[]}}}
+ function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},replaceChildren(){this.children=[]}}}
  for(const strId of ['step-1','step-2','step-3','step-4']){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement);}
  const mapWindowListeners=new Map();
  const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:''},crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
@@ -69,4 +69,25 @@ test('guest checkout keeps its details step and account requests do not authenti
  objHarness.mapElements.get('start-order').handlers.click();
  assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),false);
+});
+test('demo role picker exposes Customer and Admin UI without granting server access',()=>{
+ const objHarness=createHarness();
+ objHarness.mapElements.get('sign-in').handlers.click();
+ assert.equal(objHarness.mapElements.get('demo-sign-in').open,true);
+ objHarness.mapElements.get('demo-role').value='customer';
+ objHarness.mapElements.get('demo-role-continue').handlers.click({preventDefault(){}});
+ assert.equal(vm.runInContext('objAuthState.user.role',objHarness.objContext),'customer');
+ assert.equal(vm.runInContext('objAuthState.demo',objHarness.objContext),true);
+ assert.equal(objHarness.mapElements.get('orders-button').classList.contains('hidden'),false);
+ assert.equal(objHarness.mapElements.get('firstName').value,'Demo');
+ assert.match(objHarness.mapElements.get('auth-message').textContent,/Server data stays protected/);
+});
+test('demo order preview never submits customer or admin demo data to the order API',async()=>{
+ const objHarness=createHarness();
+ vm.runInContext("selectDemoRole('customer')",objHarness.objContext);
+ vm.runInContext("state.pizzas[0].size='Small'",objHarness.objContext);
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.equal(objHarness.arrRequests.length,0);
+ assert.match(objHarness.mapElements.get('order-number').textContent,/^DEMO-/);
+ assert.equal(objHarness.mapElements.get('receipt-total').textContent,'$10.00');
 });
