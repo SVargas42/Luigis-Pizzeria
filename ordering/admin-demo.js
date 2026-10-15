@@ -11,9 +11,9 @@ const mapMenuPrices = new Map([
 export function createDemoAdminState(objNow = new Date()) {
   const fnPlaced = nMinutes => new Date(objNow.getTime()-nMinutes*60*1000).toISOString();
   const arrOrders = [
-    {id:'DEMO-101',customer_name:'Demo Customer',customer_email:'customer@example.test',customer_phone:'',status:'preparing',total_cents:1450,created_at:fnPlaced(18),updated_at:fnPlaced(5),items:[{kind:'pizza',description:'Medium pizza with Pepperoni',quantity:1,unit_price_cents:1450}]},
-    {id:'DEMO-102',customer_name:'Sample Guest',customer_email:'guest@example.test',customer_phone:'',status:'received',total_cents:2200,created_at:fnPlaced(7),updated_at:fnPlaced(7),items:[{kind:'pizza',description:'Large pizza',quantity:1,unit_price_cents:1600},{kind:'side',description:'Pizza Bites',quantity:1,unit_price_cents:600}]},
-    {id:'DEMO-099',customer_name:'Past Demo Guest',customer_email:'past-guest@example.test',customer_phone:'',status:'completed',total_cents:1925,created_at:fnPlaced(125),updated_at:fnPlaced(85),items:[{kind:'pizza',description:'Small pizza with Cheese',quantity:1,unit_price_cents:1150},{kind:'drink',description:'Coke (Medium)',quantity:1,unit_price_cents:275},{kind:'side',description:'Breadsticks',quantity:1,unit_price_cents:500}]}
+    {id:'101',customer_name:'Alex Morgan',customer_email:'alex.morgan@example.com',customer_phone:'',status:'preparing',total_cents:1450,created_at:fnPlaced(18),updated_at:fnPlaced(5),items:[{kind:'pizza',description:'Medium pizza with Pepperoni',quantity:1,unit_price_cents:1450}]},
+    {id:'102',customer_name:'Jamie Carter',customer_email:'jamie.carter@example.com',customer_phone:'',status:'received',total_cents:2200,created_at:fnPlaced(7),updated_at:fnPlaced(7),items:[{kind:'pizza',description:'Large pizza',quantity:1,unit_price_cents:1600},{kind:'side',description:'Pizza Bites',quantity:1,unit_price_cents:600}]},
+    {id:'99',customer_name:'Morgan Ellis',customer_email:'morgan.ellis@example.com',customer_phone:'',status:'completed',total_cents:1925,created_at:fnPlaced(125),updated_at:fnPlaced(85),items:[{kind:'pizza',description:'Small pizza with Cheese',quantity:1,unit_price_cents:1150},{kind:'drink',description:'Coke (Medium)',quantity:1,unit_price_cents:275},{kind:'side',description:'Breadsticks',quantity:1,unit_price_cents:500}]}
   ];
   return {orders:arrOrders};
 }
@@ -32,11 +32,11 @@ export function handleDemoAdminRequest(strPath, objOptions, objState, objNow = n
   if (strMethod === 'GET' && objUrl.pathname === '/api/admin/customers') {
     const strQuery=(objUrl.searchParams.get('q')||'').toLowerCase();
     return [
-      {first_name:'Demo',last_name:'Customer',email:'customer@example.test',phone:'',order_count:2,total_cents:1450,last_order:objState.orders[0].created_at},
-      {first_name:'Sample',last_name:'Guest',email:'guest@example.test',phone:'',order_count:1,total_cents:2200,last_order:objState.orders[1].created_at}
+      {first_name:'Alex',last_name:'Morgan',email:'alex.morgan@example.com',phone:'',order_count:2,total_cents:1450,last_order:objState.orders[0].created_at},
+      {first_name:'Jamie',last_name:'Carter',email:'jamie.carter@example.com',phone:'',order_count:1,total_cents:2200,last_order:objState.orders[1].created_at}
     ].filter(objCustomer=>`${objCustomer.email} ${objCustomer.last_name}`.toLowerCase().includes(strQuery));
   }
-  const objStatusMatch=objUrl.pathname.match(/^\/api\/admin\/orders\/(DEMO-\d+)$/);
+  const objStatusMatch=objUrl.pathname.match(/^\/api\/admin\/orders\/(\d+)$/);
   if (strMethod === 'PATCH' && objStatusMatch) {
     const objOrder=objState.orders.find(objItem=>objItem.id===objStatusMatch[1]);
     if(!objOrder)throw new Error('Demo order not found.');
@@ -45,7 +45,7 @@ export function handleDemoAdminRequest(strPath, objOptions, objState, objNow = n
     objOrder.status=strStatus;objOrder.updated_at=objNow.toISOString();
     return {status:strStatus};
   }
-  const objEditMatch=objUrl.pathname.match(/^\/api\/admin\/orders\/(DEMO-\d+)\/items$/);
+  const objEditMatch=objUrl.pathname.match(/^\/api\/admin\/orders\/(\d+)\/items$/);
   if(strMethod==='PATCH'&&objEditMatch){
     const objOrder=objState.orders.find(objItem=>objItem.id===objEditMatch[1]);
     if(!objOrder||!['received','preparing','ready'].includes(objOrder.status))throw new Error('Only current demo orders can be edited.');

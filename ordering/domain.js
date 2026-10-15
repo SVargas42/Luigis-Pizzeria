@@ -141,7 +141,8 @@ export function buildSyntheticEmployeeData(objNow=new Date()) {
     const nShiftsCompleted=arrWorkDays[nIndex].filter(nDay=>nDay<nWeekday).length;
     const nHoursThisWeek=nShiftsCompleted*6+nShiftHours;
     const nOrdersThisWeek=nShiftsCompleted*(12+nIndex*3)+nShiftOrders;
-    return {name:`Demo Employee ${strCode}`,role:['Pizza maker','Order coordinator','Kitchen lead','Delivery prep'][nIndex],shift:bWorksToday?`${String(nStart).padStart(2,'0')}:00–${String(nEnd).padStart(2,'0')}:00 UTC`:'No shift scheduled today',shiftStatus:strShiftStatus,hoursToday:nShiftHours,ordersToday:nShiftOrders,shiftsThisWeek:nShiftsCompleted,hoursThisWeek:Number(nHoursThisWeek.toFixed(1)),ordersThisWeek:nOrdersThisWeek,averagePrepMinutes:14+nIndex*2};
+    const arrWeeklySeries=Array.from({length:7},(_,nOffset)=>{const objDate=addDays(objNow,nOffset-6);const nDateWeekday=(objDate.getUTCDay()+6)%7;const bIsToday=dayStamp(objDate)===dayStamp(objNow);const nValue=bIsToday?nShiftOrders:arrWorkDays[nIndex].includes(nDateWeekday)?9+nIndex*3+(objDate.getUTCDate()+nIndex)%7:0;return {label:dayStamp(objDate),value:nValue};});
+    return {name:['Mia Rossi','Sam Rivera','Jordan Lee','Taylor Brooks'][nIndex],role:['Pizza maker','Order coordinator','Kitchen lead','Delivery prep'][nIndex],shift:bWorksToday?`${String(nStart).padStart(2,'0')}:00–${String(nEnd).padStart(2,'0')}:00 UTC`:'No shift scheduled today',shiftStatus:strShiftStatus,hoursToday:nShiftHours,ordersToday:nShiftOrders,shiftsThisWeek:nShiftsCompleted,hoursThisWeek:Number(nHoursThisWeek.toFixed(1)),ordersThisWeek:nOrdersThisWeek,averagePrepMinutes:14+nIndex*2,weeklySeries:arrWeeklySeries};
   });
   return {synthetic:true,asOf:dayStamp(new Date(Date.UTC(objNow.getUTCFullYear(),objNow.getUTCMonth(),objNow.getUTCDate()))),employees:arrEmployees};
 }

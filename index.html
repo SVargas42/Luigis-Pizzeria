@@ -49,10 +49,9 @@
       <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end"><div class="top-note">Fresh from our oven, straight to your table <span class="ms-2" aria-hidden="true">🍕</span></div><nav class="account-controls" aria-label="Account navigation"><button class="btn btn-outline-secondary" type="button" id="sign-in">Sign in</button><button class="btn btn-outline-secondary" type="button" id="create-account">Create account</button><span class="account-name hidden" id="account-name"></span><button class="btn btn-primary hidden" type="button" id="orders-button">Orders</button><a class="btn btn-outline-secondary hidden" id="admin-analytics-link" href="/admin/analytics?demo=1&tab=ordering">Analytics</a><button class="btn btn-outline-secondary hidden" type="button" id="sign-out">Sign out</button></nav></div>
     </div>
   </header>
-  <div class="container"><p class="account-message" id="auth-message" role="status" aria-live="polite">You can order as a guest. Sign-in and account creation will connect when the authentication work is ready.</p></div>
-  <dialog id="demo-sign-in" aria-labelledby="demo-sign-in-title" aria-describedby="demo-sign-in-help" class="demo-sign-in">
-    <form method="dialog" id="demo-role-form"><h2 id="demo-sign-in-title">Choose a demo role</h2>
-      <p id="demo-sign-in-help">Demo roles let you preview the site. They do not authenticate with the server or grant access to protected staff data.</p>
+  <div class="container"><p class="account-message" id="auth-message" role="status" aria-live="polite">Welcome to Luigi’s Pizza. Order as a guest or sign in to your account.</p></div>
+  <dialog id="demo-sign-in" aria-labelledby="demo-sign-in-title" class="demo-sign-in">
+    <form method="dialog" id="demo-role-form"><h2 id="demo-sign-in-title">Sign in</h2>
       <label class="form-label" for="demo-role">Sign in as</label>
       <select class="form-select mb-3" id="demo-role"><option value="guest">Guest</option><option value="customer">Customer</option><option value="admin">Admin</option></select>
       <div class="button-row"><button class="btn btn-outline-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="demo-role-continue" value="continue">Continue</button></div>
@@ -63,13 +62,13 @@
       <div class="container">
         <div class="welcome-banner"><div class="banner-copy"><div class="banner-kicker"><span aria-hidden="true">✦</span> Luigi's Pizza · Made with amore</div><h1 id="home-title" tabindex="-1">A little slice of Italy, just around the corner.</h1><p>Fresh from our oven, made for sharing, and always worth gathering around.</p></div></div>
         <div class="welcome-card">
-          <div class="welcome-copy"><div class="home-badge"><span aria-hidden="true">✦</span> A little slice of Italy, right around the corner</div><h2>Come hungry.<br>Leave happy.</h2><p>At Luigi’s, every pie starts with slow-risen dough, bright tomato sauce, and a generous sprinkle of family tradition. We make the good stuff fresh, pile on the toppings you love, and save you a seat at the table. Whether it’s a quick weeknight dinner or a long-overdue get-together, there’s always room for one more slice.</p><p>Pull up a chair, bring your appetite, and let’s make tonight delicious.</p><p>Sign in or create an account for order history, or continue as a guest.</p><button class="btn btn-primary" type="button" id="start-order">Continue as Guest <span aria-hidden="true">→</span></button></div>
+          <div class="welcome-copy"><div class="home-badge"><span aria-hidden="true">✦</span> A little slice of Italy, right around the corner</div><h2>Come hungry.<br>Leave happy.</h2><p>At Luigi’s, every pie starts with slow-risen dough, bright tomato sauce, and a generous sprinkle of family tradition. We make the good stuff fresh, pile on the toppings you love, and save you a seat at the table. Whether it’s a quick weeknight dinner or a long-overdue get-together, there’s always room for one more slice.</p><p>Pull up a chair, bring your appetite, and let’s make tonight delicious.</p><p>Order as a guest or sign in to see your order history.</p><button class="btn btn-primary" type="button" id="start-order">Continue as Guest <span aria-hidden="true">→</span></button></div>
           <div class="welcome-photo" role="img" aria-label="Freshly baked pizza topped with basil and cheese"></div>
         </div>
         <div class="home-info">
           <article class="info-card"><h2>Come on in</h2><p>Good food tastes even better shared. Stop by for a cozy meal, or order ahead and bring a little Luigi’s goodness home. We’ll have your favorite pie hot and ready.</p></article>
           <article class="info-card"><h2>Hours</h2><ul class="hours-list"><li><span>Monday–Friday</span><span>9:00 AM–12:00 AM</span></li><li><span>Saturday</span><span>8:00 AM–2:00 AM</span></li><li><span>Sunday</span><span class="closed">Closed</span></li></ul></article>
-          <article class="info-card"><h2>Find a nearby pizza stop</h2><p>For this school project, our location reference is Pizza Hut at 641 N Willow Ave, Cookeville, TN 38501. Luigi’s phone: (931) 555-0147 <span class="text-secondary">(fictional project number)</span>.</p><a href="https://www.google.com/maps/dir/?api=1&amp;destination=Pizza+Hut%2C+641+N+Willow+Ave%2C+Cookeville%2C+TN+38501" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden="true">↗</span></a></article>
+          <article class="info-card"><h2>Find us</h2><p>641 N Willow Ave, Cookeville, TN 38501<br>Call Luigi’s at (931) 555-0147.</p><a href="https://www.google.com/maps/dir/?api=1&amp;destination=Pizza+Hut%2C+641+N+Willow+Ave%2C+Cookeville%2C+TN+38501" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden="true">↗</span></a></article>
         </div>
       </div>
     </section>
@@ -110,7 +109,7 @@
     <section class="panel hidden" id="step-3" aria-labelledby="payment-title">
       <div class="section-label" data-step-label="3">Step 3 of 4</div><h2 class="panel-title" id="payment-title" tabindex="-1"><span class="visually-hidden" data-step-heading="3">Step 3 of 4: </span>Review your order</h2><p class="panel-subtitle">Confirm the items and total before placing your pickup order.</p>
       <div class="payment-total"><span>Order total</span><strong id="payment-total">$0.00</strong></div>
-      <form id="payment-form"><p>Your order will be prepared for pickup. Pay at the counter when you collect it.</p><p>Prices are in USD. The displayed total has no added tax or fees; confirm local pricing before launch.</p><p id="order-error" class="alert-inline" role="alert"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Place Pickup Order →</button></div></form>
+      <form id="payment-form"><p>Pay securely online to place your pickup order.</p><p id="order-error" class="alert-inline" role="alert"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Pay and Place Order →</button></div></form>
     </section>
 
     <section class="panel hidden" id="step-4" aria-labelledby="confirm-title">
@@ -118,7 +117,7 @@
         <div class="order-meta"><div class="meta-box"><div class="meta-label">Order number</div><div class="meta-value" id="order-number"></div></div><div class="meta-box"><div class="meta-label">Estimated time</div><div class="meta-value">30–45 minutes</div></div><div class="meta-box"><div class="meta-label">Order for</div><div class="meta-value" id="confirm-name"></div></div></div>
         <div class="text-start mb-3"><div class="meta-label">Contact email</div><div class="meta-value" id="confirm-email"></div></div>
         <div class="receipt"><h3>Your receipt</h3><div class="summary-lines" id="receipt-lines"></div><div class="receipt-detail" id="receipt-details"></div><div class="summary-total"><span>Total</span><strong id="receipt-total">$0.00</strong></div></div>
-        <p class="disclaimer">Your order is saved. Payment is due at pickup.</p><div class="d-flex justify-content-center flex-wrap gap-2 mt-3"><button class="btn btn-primary" type="button" id="new-order">Start a New Order</button><button class="btn btn-outline-secondary" type="button" id="confirmation-home">Back to Home</button></div>
+        <div class="d-flex justify-content-center flex-wrap gap-2 mt-3"><button class="btn btn-primary" type="button" id="new-order">Start a New Order</button><button class="btn btn-outline-secondary" type="button" id="confirmation-home">Back to Home</button></div>
       </div>
     </section>
     </div>
@@ -150,7 +149,7 @@
         $('orders-button').classList.remove('hidden');
         $('sign-out').classList.remove('hidden');
         $('admin-analytics-link').classList.toggle('hidden',objAuthState.user.role!=='admin');
-        $('auth-message').textContent=bDemo?`Demo ${objAuthState.user.role} selected. Server data stays protected; this role only previews the site.`:objAuthState.user.role==='admin'?'Staff account signed in. Open Orders to manage the order queue and analytics.':'Signed in. Your name and email are ready for checkout.';
+        $('auth-message').textContent=objAuthState.user.role==='admin'?'Welcome back. Manage orders and business insights from your account.':'Welcome back. Your account details are ready for checkout.';
         $('start-order').textContent='Place an Order →';
         if(state.step===1&& !$('order-view').classList.contains('hidden'))goTo(2);
       }else{
@@ -158,7 +157,7 @@
         $('start-order').textContent='Continue as Guest →';
         $('sign-in').classList.remove('hidden');$('create-account').classList.remove('hidden');$('account-name').classList.add('hidden');$('orders-button').classList.add('hidden');$('admin-analytics-link').classList.add('hidden');$('sign-out').classList.add('hidden');
         if(state.step!==1&& !$('order-view').classList.contains('hidden'))goTo(1);
-        $('auth-message').textContent=objAuthState.ready?'You can sign in or continue as a guest.':'Sign-in and account creation will connect when the authentication work is ready. Guest ordering is available now.';
+        $('auth-message').textContent='You can sign in or continue as a guest.';
       }
       updateProgress();
     }
@@ -166,8 +165,8 @@
     function requestAuthAction(strAction){
       const objRequest=new CustomEvent('luigi:auth-request',{detail:{action:strAction}});
       window.dispatchEvent(objRequest);
-      if(strAction==='sign-in'){$('demo-sign-in').showModal();$('demo-role').focus();$('auth-message').textContent='Choose a demo role to preview the account experience, or continue as a guest.';}
-      else $('auth-message').textContent=objAuthState.ready?'Opening account access…':'Account access is reserved for the authentication integration. You can continue as a guest.';
+      if(strAction==='sign-in'){$('demo-sign-in').showModal();$('demo-role').focus();$('auth-message').textContent='Choose an account type to continue.';}
+      else $('auth-message').textContent='Opening account access…';
     }
 
     function selectDemoRole(strRole){
@@ -178,7 +177,7 @@
         $('home-title').focus({preventScroll:true});
         return;
       }
-      const objDemoUser=strRole==='admin'?{id:'demo-admin',role:'admin',email:'admin@example.test',firstName:'Demo',lastName:'Admin'}:{id:'demo-customer',role:'customer',email:'customer@example.test',firstName:'Demo',lastName:'Customer'};
+      const objDemoUser=strRole==='admin'?{id:'admin-preview',role:'admin',email:'admin@luigispizza.com',firstName:'Luigi',lastName:'Admin'}:{id:'customer-preview',role:'customer',email:'customer@luigispizza.com',firstName:'Alex',lastName:'Morgan'};
       setAuthState({authenticated:true,authReady:true,user:objDemoUser},true);
       $('home-title').focus({preventScroll:true});
     }
@@ -187,7 +186,7 @@
       window.dispatchEvent(new CustomEvent('luigi:auth-request',{detail:{action:'sign-out'}}));
       setAuthState({authenticated:false,authReady:true});
       showHome();
-      $('auth-message').textContent='You are signed out. Continue as a guest or sign in with another demo role.';
+      $('auth-message').textContent='You are signed out. Continue as a guest or sign in again.';
     }
 
     window.addEventListener('luigi:auth-state',objEvent=>setAuthState(objEvent.detail));
@@ -203,7 +202,7 @@
     function quantitySelect(value,label){return `<select class="form-select quantity-select" aria-label="Qty: ${label}">${Array.from({length:10},(_,i)=>`<option value="${i+1}" ${value===i+1?'selected':''}>${i+1}</option>`).join('')}</select>`}
     function renderExtras(){
       $('sides-list').innerHTML=Object.entries(prices.sides).filter(([name])=>name!=='None').map(([name,price])=>{const chosen=state.sides.find(side=>side.name===name);return `<div class="extra-row"><label class="extra-choice"><input class="form-check-input side-check" type="checkbox" value="${name}" ${chosen?'checked':''}><span class="extra-name">${name}</span><span class="extra-price">${money(price)} each</span></label><div class="extra-quantity ${chosen?'':'hidden'}"><span>Qty</span>${quantitySelect(chosen?.quantity||1,`${name} quantity`)}</div></div>`}).join('');
-      $('drinks-list').innerHTML=state.drinks.map(drink=>`<div class="extra-row drink-config" data-drink-id="${drink.id}"><label class="extra-field"><span>Drink</span><select class="form-select drink-name-select" aria-label="Drink type">${['Coke','Pepsi','Dr Pepper','Water'].map(name=>`<option value="${name}" ${drink.name===name?'selected':''}>${name}</option>`).join('')}</select></label><label class="extra-field"><span>Size</span><select class="form-select drink-size-select" aria-label="${drink.name} size">${Object.keys(prices.drinks).map(size=>`<option value="${size}" ${drink.size===size?'selected':''}>${size} · ${money(prices.drinks[size])}</option>`).join('')}</select></label><label class="extra-field"><span>Qty</span>${quantitySelect(drink.quantity,`${drink.name} quantity`)}</label><button type="button" class="btn btn-sm btn-link text-danger drink-remove" aria-label="Remove ${drink.name}">Remove</button></div>`).join('')||'<div class="empty-cart">No drinks added yet.</div>';
+      $('drinks-list').innerHTML=state.drinks.map(drink=>`<div class="extra-row drink-config" data-drink-id="${drink.id}"><label class="extra-field"><span>Drink</span><select class="form-select drink-name-select" aria-label="Drink type"><option value="">Choose a drink</option>${['Coke','Pepsi','Dr Pepper','Water'].map(name=>`<option value="${name}" ${drink.name===name?'selected':''}>${name}</option>`).join('')}</select></label><label class="extra-field"><span>Size</span><select class="form-select drink-size-select" aria-label="${drink.name||'Drink'} size"><option value="">Choose a size</option>${Object.keys(prices.drinks).map(size=>`<option value="${size}" ${drink.size===size?'selected':''}>${size} · ${money(prices.drinks[size])}</option>`).join('')}</select></label><label class="extra-field"><span>Qty</span>${quantitySelect(drink.quantity,`${drink.name||'Drink'} quantity`)}</label><button type="button" class="btn btn-sm btn-link text-danger drink-remove" aria-label="Remove ${drink.name||'drink'}">Remove</button></div>`).join('')||'<div class="empty-cart">No drinks added yet.</div>';
       $('sides-list').querySelectorAll('.side-check').forEach(input=>input.addEventListener('change',()=>{const name=input.value;if(input.checked)state.sides.push({name,quantity:1});else state.sides=state.sides.filter(side=>side.name!==name);renderAll();[...$('sides-list').querySelectorAll('.side-check')].find(item=>item.value===name)?.focus({preventScroll:true})}));
       $('sides-list').querySelectorAll('.extra-quantity select').forEach(select=>select.addEventListener('change',()=>{const side=state.sides.find(item=>select.getAttribute('aria-label')===`Qty: ${item.name} quantity`);if(side){side.quantity=Number(select.value);renderSummary()}}));
       $('drinks-list').querySelectorAll('.drink-config').forEach(row=>{const drink=state.drinks.find(item=>item.id===Number(row.dataset.drinkId));row.querySelector('.drink-name-select').addEventListener('change',event=>{const id=drink.id;drink.name=event.target.value;renderAll();document.querySelector(`[data-drink-id="${id}"] .drink-name-select`)?.focus({preventScroll:true})});row.querySelector('.drink-size-select').addEventListener('change',event=>{drink.size=event.target.value;renderSummary()});row.querySelector('.quantity-select').addEventListener('change',event=>{drink.quantity=Number(event.target.value);renderSummary()});row.querySelector('.drink-remove').addEventListener('click',()=>{state.drinks=state.drinks.filter(item=>item.id!==drink.id);renderAll();const next=$('drinks-list').querySelector('.drink-config .drink-name-select');(next||$('add-drink')).focus({preventScroll:true})})});
@@ -212,7 +211,7 @@
       const items=[];
       state.pizzas.forEach((pizza,index)=>{if(pizza.size){const toppings=pizza.toppings.length?` with ${pizza.toppings.map(name=>name.toLowerCase()).join(', ')}`:'';items.push({name:`Pizza ${index+1} ${pizza.size}${toppings}`,price:prices.pizza[pizza.size]+pizza.toppings.reduce((nSum,strName)=>nSum+objToppingPrices[strName],0)})}});
       state.sides.forEach(side=>items.push({name:`${side.name} × ${side.quantity}`,price:prices.sides[side.name]*side.quantity}));
-      state.drinks.forEach(drink=>items.push({name:`${drink.name} (${drink.size}) × ${drink.quantity}`,price:prices.drinks[drink.size]*drink.quantity}));
+      state.drinks.filter(drink=>drink.name&&drink.size).forEach(drink=>items.push({name:`${drink.name} (${drink.size}) × ${drink.quantity}`,price:prices.drinks[drink.size]*drink.quantity}));
       return items;
     }
     function total(){return lineItems().reduce((sum,item)=>sum+item.price,0)}
@@ -271,12 +270,6 @@
     }
     async function loadCustomerOrders(){
       $('customer-orders-panel').classList.remove('hidden');$('customer-orders-error').textContent='Loading your orders…';$('customer-orders-list').replaceChildren();
-      if(objAuthState.demo){
-        const objPlacedAt=new Date(Date.now()-12*60*1000);
-        renderCustomerOrders([{id:'DEMO-2048',total_cents:1600,status:'preparing',created_at:objPlacedAt.toISOString(),items:[{description:'Medium pizza with pepperoni',quantity:1}]}]);
-        $('customer-orders-error').textContent='Demo order preview · synthetic status and timestamp; no customer records were accessed.';
-        return;
-      }
       try{const objResponse=await fetch('/api/orders/mine');const arrOrders=await objResponse.json();if(!objResponse.ok)throw Error(arrOrders.error||'Unable to load orders.');renderCustomerOrders(arrOrders);$('customer-orders-error').textContent='';}
       catch(error){$('customer-orders-error').textContent=error.message||'Unable to load orders.';}
     }
@@ -295,31 +288,30 @@
     $('portal-view-order').addEventListener('click',loadCustomerOrders);
     $('portal-home').addEventListener('click',showHome);
     $('home-link').addEventListener('click',event=>{event.preventDefault();showHome()});
-    $('to-payment').addEventListener('click',()=>{ $('menu-error').textContent=''; if(state.pizzas.some(pizza=>!pizza.size)){$('menu-error').textContent='Choose a size for every pizza, or remove any unfinished pizzas.';return}goTo(3)});
+    $('to-payment').addEventListener('click',()=>{ $('menu-error').textContent=''; if(state.pizzas.some(pizza=>!pizza.size)){$('menu-error').textContent='Choose a size for every pizza, or remove any unfinished pizzas.';return}if(state.drinks.some(drink=>!drink.name||!drink.size)){$('menu-error').textContent='Choose a drink and size for each drink you added.';$('drinks-list').querySelector('.drink-name-select')?.focus();return}goTo(3)});
     $('add-pizza').addEventListener('click',()=>{const pizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas.push(pizza);state.activePizzaId=pizza.id;renderAll();const card=$('pizzas-container').lastElementChild;card?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});card?.querySelector('.toggle-pizza')?.focus({preventScroll:true})});
-    $('add-drink').addEventListener('click',()=>{const drink={id:nextDrinkId++,name:'Coke',size:'Medium',quantity:1};state.drinks.push(drink);renderAll();const row=$('drinks-list').lastElementChild;row?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});row?.querySelector('.drink-name-select')?.focus({preventScroll:true})});
+    $('add-drink').addEventListener('click',()=>{const drink={id:nextDrinkId++,name:'',size:'',quantity:1};state.drinks.push(drink);renderAll();const row=$('drinks-list').lastElementChild;row?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});row?.querySelector('.drink-name-select')?.focus({preventScroll:true})});
     document.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>{const nTarget=Number(button.dataset.go);if(nTarget===1&&objAuthState.user)showHome();else goTo(nTarget)}));
     $('payment-form').addEventListener('submit',async event=>{
-      event.preventDefault();if(submitting)return;submitting=true;$('place-order').disabled=true;$('order-error').textContent='Saving your order…';
-      if(objAuthState.demo){
-        $('order-number').textContent=`DEMO-${String(Date.now()).slice(-6)}`;
-        $('confirm-name').textContent=`${state.customer.firstName} ${state.customer.lastName}`.trim();
-        $('confirm-email').textContent=state.customer.email;
-        $('receipt-lines').innerHTML=summaryMarkup();$('receipt-total').textContent=money(total());
-        $('receipt-details').textContent='Demo pickup · no order was sent to the restaurant.';
-        $('order-error').textContent='';submitting=false;$('place-order').disabled=false;goTo(4);return;
-      }
+      event.preventDefault();if(submitting)return;submitting=true;$('place-order').disabled=true;$('order-error').textContent='Opening secure checkout…';
       requestKey ||= crypto.randomUUID();
       try {
-        const response=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks})});
-        const order=await response.json();if(!response.ok)throw Error(order.error);
-        $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=state.customer.firstName+' '+state.customer.lastName;$('confirm-email').textContent=state.customer.email;
-        $('receipt-lines').replaceChildren();for(const item of order.items){const row=document.createElement('div');row.className='summary-line';const name=document.createElement('span'),value=document.createElement('span');name.textContent=item.description+' × '+item.quantity;value.textContent=money(item.unit*item.quantity/100);row.append(name,value);$('receipt-lines').append(row)}
-        $('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent='Pickup · Pay at counter';$('order-error').textContent='';goTo(4);
+        const payload={requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks};sessionStorage.setItem('luigis-pending-checkout',JSON.stringify(payload));
+        const response=await fetch('/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to start secure checkout.');location.assign(result.url);
       }catch(error){$('order-error').textContent=error.message || 'Unable to save your order. Please retry.';}finally{submitting=false;$('place-order').disabled=false;}
     });
     $('new-order').addEventListener('click',()=>{requestKey=null;state.customer=objAuthState.user?{firstName:objAuthState.user.firstName,lastName:objAuthState.user.lastName,email:objAuthState.user.email,phone:objAuthState.user.phone}:{firstName:'',lastName:'',email:'',phone:''};const objPizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas=[objPizza];state.activePizzaId=objPizza.id;state.sides=[];state.drinks=[];$('customer-form').reset();if(objAuthState.user){$('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;}$('payment-form').reset();document.querySelectorAll('.is-invalid').forEach(el=>setInvalid(el,false));$('menu-error').textContent='';renderAll();goTo(objAuthState.user?2:1)});
     $('confirmation-home').addEventListener('click',showHome);
+    async function finishReturnedCheckout(){
+      if(!location.search.includes('checkout='))return;
+      const params=new URLSearchParams(location.search);const status=params.get('checkout');if(!status)return;
+      if(status==='cancelled'){$('order-error').textContent='Checkout was cancelled. Your order has not been placed.';goTo(3);history.replaceState({},'', '/');return;}
+      if(status!=='success')return;
+      $('order-error').textContent='Verifying payment…';const strSaved=sessionStorage.getItem('luigis-pending-checkout');
+      try{const payload=JSON.parse(strSaved||'{}');const response=await fetch(`/api/checkout/verify?session_id=${encodeURIComponent(params.get('session_id')||'')}`);const order=await response.json();if(!response.ok)throw Error(order.error||'Payment could not be verified.');
+        $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=`${payload.customer.firstName} ${payload.customer.lastName}`;$('confirm-email').textContent=payload.customer.email;$('receipt-lines').replaceChildren();for(const item of order.items){const row=document.createElement('div');row.className='summary-line';const name=document.createElement('span'),value=document.createElement('span');name.textContent=`${item.description} × ${item.quantity}`;value.textContent=money(item.unit*item.quantity/100);row.append(name,value);$('receipt-lines').append(row)}$('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent='Paid online · Pickup';$('order-error').textContent='';sessionStorage.removeItem('luigis-pending-checkout');requestKey=null;goTo(4);
+      }catch(error){$('order-error').textContent=error.message||'Payment verification is taking longer than expected. Refresh to check again.';goTo(3);}finally{history.replaceState({},'', '/');}
+    }
     $('start-order').disabled=true;
     fetch('/api/menu').then(async response=>{if(!response.ok)throw Error('Menu unavailable');return response.json()}).then(rows=>{
       prices={pizza:{},topping:0,sides:{None:0},drinks:{}};toppingChoices=[];objToppingPrices={};
@@ -328,6 +320,7 @@
     }).catch(()=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent='Ordering is currently unavailable. Please call the restaurant.';$('start-order').after(p)});
     fetch('/api/session').then(async objResponse=>{const objSession=await objResponse.json();setAuthState(objSession)}).catch(()=>setAuthState({authenticated:false,authReady:false}));
     renderAll();
+    finishReturnedCheckout();
   </script>
 </body>
 </html>

@@ -12,6 +12,10 @@ test('recalculates edited order items with current server menu prices',()=>{
  assert.deepEqual(arrItems.map(objItem=>objItem.unit),[1625,500,350]);
  assert.equal(arrItems[0].description,'Medium pizza with Cheese, Sausage');
 });
+test('allows multiple identical pizzas in one admin line item',()=>{
+ const arrItems=normalizeEditableItems([{kind:'pizza',description:'Small pizza with Cheese',quantity:2}],menu);
+ assert.equal(arrItems[0].quantity,2);assert.equal(arrItems[0].unit,1150);
+});
 test('rejects unsupported edits and quantities outside supported limits',()=>{
  const mapMenu=new Map([['pizza:Small',1000],['topping:Cheese',150],['side:Breadsticks',500],['drink:Large',350]]);
  for(const objItem of [{kind:'pizza',description:'Free pizza',quantity:1},{kind:'pizza',description:'Small pizza with Cheese, Cheese',quantity:1},{kind:'side',description:'Mystery side',quantity:1},{kind:'drink',description:'Coke (Jumbo)',quantity:1},{kind:'side',description:'Breadsticks',quantity:11}]) assert.throws(()=>normalizeEditableItems([objItem],mapMenu));

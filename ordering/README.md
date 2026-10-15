@@ -1,6 +1,6 @@
 # Luigi’s MariaDB ordering system
 
-The supplied pizza interface is connected to a Node.js API and MariaDB. Customers can check out as guests; sign-in and account creation remain a teammate-owned integration. Staff use `/admin` for current and past orders, order edits, synthetic analytics, and customer search. Checkout is pickup with payment at the counter. No email is sent automatically.
+The supplied pizza interface is connected to a Node.js API and MariaDB. Customers can check out as guests; sign-in and account creation remain a teammate-owned integration. Staff use `/admin` for current and past orders, order edits, analytics, and customer search. Checkout uses Stripe-hosted online payment. No email is sent automatically.
 
 ## Debian installation
 
@@ -22,13 +22,14 @@ In the MariaDB console, create a restricted runtime account with a real unique p
 CREATE USER 'luigis_app'@'127.0.0.1' IDENTIFIED BY 'YOUR_LONG_RANDOM_PASSWORD';
 GRANT SELECT, INSERT, UPDATE ON luigis.customers TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT, INSERT, UPDATE ON luigis.orders TO 'luigis_app'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE ON luigis.pending_checkouts TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT, INSERT, DELETE ON luigis.order_items TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT, INSERT ON luigis.order_events TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT ON luigis.menu_prices TO 'luigis_app'@'127.0.0.1';
 EXIT;
 ```
 
-For a local trial, copy `.env.example` to `.env`, set the database and staff passwords, then run `npm start`. Open `http://localhost:3000` and `http://localhost:3000/admin`. The browser asks for the staff username/password. Node is bound to localhost by default. Access a remote trial through an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 your-server`) and use localhost in your browser. Keep `.env` private and out of version control.
+For a local trial, copy `.env.example` to `.env`, set the database and staff passwords, `STRIPE_SECRET_KEY`, and the public HTTPS `SITE_URL`, then run `npm start`. Open `http://localhost:3000` and `http://localhost:3000/admin`. The browser asks for the staff username/password. Node is bound to localhost by default. Access a remote trial through an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 your-server`) and use localhost in your browser. Keep `.env` private and out of version control.
 
 For an existing database, apply the current schema again to create the new `order_events` audit table (`CREATE TABLE IF NOT EXISTS` is used), then grant the app `SELECT, INSERT` on `luigis.order_events` and `DELETE` on `luigis.order_items` for staff item edits.
 
@@ -63,7 +64,7 @@ UPDATE luigis.menu_prices SET price_cents = 1800 WHERE category='pizza' AND name
 
 Refresh the ordering page after price changes. All topping prices must remain equal because the supplied interface displays a single topping price. The backend uses the actual individual price for each topping. Menu names and drink choices are currently tied to the supplied pizza interface.
 
-Statuses progress from received → preparing → ready → completed; received, preparing, and ready orders can be cancelled. Closed orders cannot be reopened. Staff can edit menu-valid items and quantities for received/preparing orders; totals are recalculated against database prices. The current/past split follows explicit order status, never age. Active orders older than 45 minutes are flagged for a staff check but are not automatically advanced. Analytics charts are labeled synthetic preview data and never write sample values to the order database. Actual sales analytics, capacity, tax rules, business-hours enforcement, delivery, online payment, notifications, customer login, and historical paper-record import require business-specific configuration before rollout. No card fields or card data storage are included.
+Statuses progress from received → preparing → ready → completed; received, preparing, and ready orders can be cancelled. Closed orders cannot be reopened. Staff can edit menu-valid items and quantities for active orders; totals are recalculated against database prices. The current/past split follows explicit order status, never age. Active orders older than 45 minutes are flagged for a staff check but are not automatically advanced. Stripe-hosted Checkout handles card entry; Luigi’s application does not receive or store card numbers. Orders are only created after Stripe confirms payment.
 
 ## Verification and backups
 

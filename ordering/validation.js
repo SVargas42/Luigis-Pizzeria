@@ -53,7 +53,7 @@ export function normalizeEditableItems(arrItems, mapMenu) {
    if(!objMatch) throw new Error('Pizza format: Medium pizza with Cheese, Pepperoni.');
    const strSize=objMatch[1][0].toUpperCase()+objMatch[1].slice(1).toLowerCase();
    const arrToppings=objMatch[2]?objMatch[2].split(',').map(strName=>strName.trim()):[];
-   if(nQuantity!==1||arrToppings.length>6||new Set(arrToppings.map(strName=>strName.toLowerCase())).size!==arrToppings.length) throw new Error('Each edited pizza must be one pizza with unique toppings.');
+   if(arrToppings.length>6||new Set(arrToppings.map(strName=>strName.toLowerCase())).size!==arrToppings.length) throw new Error('Each pizza can have up to six unique toppings.');
    const arrNormalized=arrToppings.map(strName=>{
     const strNameOnMenu=['Cheese','Pepperoni','Sausage','Pineapple','Olives','Barbeque Chicken'].find(strMenuName=>strMenuName.toLowerCase()===strName.toLowerCase());
     if(!strNameOnMenu) throw new Error('One or more toppings are not on the menu.');
@@ -61,7 +61,7 @@ export function normalizeEditableItems(arrItems, mapMenu) {
     return strNameOnMenu;
    });
    const strFinal=`${strSize} pizza${arrNormalized.length?' with '+arrNormalized.join(', '):''}`;
-   return {kind:'pizza',description:strFinal,quantity:1,unit:getPrice('pizza',strSize)+arrNormalized.reduce((nSum,strName)=>nSum+getPrice('topping',strName),0)};
+   return {kind:'pizza',description:strFinal,quantity:nQuantity,unit:getPrice('pizza',strSize)+arrNormalized.reduce((nSum,strName)=>nSum+getPrice('topping',strName),0)};
   }
   if(objItem.kind==='side'){
    if(!['Breadsticks','Pizza Bites'].includes(strDescription)) throw new Error('Choose Breadsticks or Pizza Bites for a side.');

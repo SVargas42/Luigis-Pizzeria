@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS orders (
  customer_email VARCHAR(254) NOT NULL,
  customer_phone VARCHAR(30) NOT NULL,
  status ENUM('received','preparing','ready','completed','cancelled') NOT NULL DEFAULT 'received',
- payment_method ENUM('pay_at_pickup') NOT NULL DEFAULT 'pay_at_pickup',
+ payment_method ENUM('pay_at_pickup','card') NOT NULL DEFAULT 'card',
+ stripe_session_id VARCHAR(255) NULL UNIQUE,
  total_cents INT UNSIGNED NOT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -38,6 +39,8 @@ CREATE TABLE IF NOT EXISTS orders (
  KEY customer_history(customer_id,created_at),
  CONSTRAINT order_customer FOREIGN KEY(customer_id) REFERENCES customers(id)
 ) ENGINE=InnoDB;
+ALTER TABLE orders MODIFY payment_method ENUM('pay_at_pickup','card') NOT NULL DEFAULT 'card';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_session_id VARCHAR(255) NULL UNIQUE;
 CREATE TABLE IF NOT EXISTS order_items (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  order_id BIGINT UNSIGNED NOT NULL,
@@ -59,4 +62,11 @@ CREATE TABLE IF NOT EXISTS order_events (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  KEY order_event_history(order_id,created_at),
  CONSTRAINT event_order FOREIGN KEY(order_id) REFERENCES orders(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS pending_checkouts (
+ request_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+ stripe_session_id VARCHAR(255) NULL UNIQUE,
+ payload_json JSON NOT NULL,
+ total_cents INT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

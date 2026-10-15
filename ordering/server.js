@@ -1,6 +1,7 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
+import {createHmac} from 'node:crypto';
 import mariadb from 'mariadb';
 import {normalizeEditableItems,validateOrder} from './validation.js';
 import {buildSyntheticAnalytics,buildSyntheticBusinessData,buildSyntheticEmployeeData,buildSyntheticItemComparison,canTransitionStatus,orderAttention} from './domain.js';
@@ -28,7 +29,7 @@ async function body(req) {
  for await (const chunk of req) {raw += chunk; if (Buffer.byteLength(raw)>32768) throw new Error('Request too large');}
  return JSON.parse(raw);
 }
-async function createOrder(payload,objIdentity=null) {
+async function createOrder(payload,objIdentity=null,stripeSessionId=null) {
  const conn = await pool.getConnection();
  try {
   await conn.beginTransaction();
@@ -39,23 +40,38 @@ async function createOrder(payload,objIdentity=null) {
   // for the original transaction and then return its committed receipt.
   await conn.query('INSERT INTO customers(first_name,last_name,email,phone) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[data.customer.firstName,data.customer.lastName,data.customer.email,data.customer.phone]);
   const [customer] = await conn.query('SELECT id FROM customers WHERE email=?',[data.customer.email]);
-  const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents) VALUES(?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total]);
+  const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents,payment_method,stripe_session_id) VALUES(?,?,?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total,'card',stripeSessionId]);
   await conn.query('UPDATE customers SET first_name=?,last_name=?,phone=? WHERE id=?',[data.customer.firstName,data.customer.lastName,data.customer.phone,customer.id]);
   for (const item of data.items) await conn.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[result.insertId,item.kind,item.description,item.quantity,item.unit]);
   await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,to_status,details) VALUES(?,?,'created','received','Order placed')",[result.insertId,objIdentity?.email || data.customer.email]);
   await conn.commit();
-  return {orderNumber:`LP-${result.insertId}`,totalCents:data.total,items:data.items};
+  return {orderNumber:`LP-${result.insertId}`,orderId:result.insertId,totalCents:data.total,items:data.items};
  } catch (error) {
   await conn.rollback();
   if (error.code === 'ER_DUP_ENTRY') {
    const [order] = await conn.query('SELECT id,total_cents FROM orders WHERE request_key=?',[payload.requestKey]);
    if (order) {
     const items = await conn.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[order.id]);
-    return {orderNumber:`LP-${order.id}`,totalCents:order.total_cents,items};
+    return {orderNumber:`LP-${order.id}`,orderId:order.id,totalCents:order.total_cents,items};
    }
   }
   throw error;
  } finally {conn.release();}
+}
+async function stripeRequest(path,params=null,method='POST') {
+ const headers={Authorization:`Bearer ${process.env.STRIPE_SECRET_KEY}`};
+ const response=await fetch(`https://api.stripe.com/v1/${path}`,{method,headers,...(params?{body:params.toString(),headers:{...headers,'Content-Type':'application/x-www-form-urlencoded'}}:{})});
+ const data=await response.json();
+ if(!response.ok) throw new Error('Payment provider request failed');
+ return data;
+}
+async function finishPaidCheckout(session) {
+ if(session.payment_status!=='paid'||session.currency!=='usd'||!session.metadata?.request_key) throw new Error('Payment is not complete.');
+ const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_session_id=?',[session.metadata.request_key,session.id]);
+ if(!pending||Number(session.amount_total)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
+ const receipt=await createOrder(JSON.parse(pending.payload_json),null,session.id);
+ await pool.query('DELETE FROM pending_checkouts WHERE request_key=?',[session.metadata.request_key]);
+ return receipt;
 }
 const server = http.createServer(async(req,res)=>{
  res.setHeader('X-Content-Type-Options','nosniff');
@@ -70,6 +86,24 @@ const server = http.createServer(async(req,res)=>{
    const objIdentity=await resolveIdentity(req);
    return send(res,200,{authenticated:Boolean(objIdentity),authReady:identityIsConfigured(),user:objIdentity});
   }
+  if(req.method==='POST'&&url.pathname==='/api/checkout/session'){
+   if(!process.env.STRIPE_SECRET_KEY||!process.env.SITE_URL)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
+   let payload;try{payload=await body(req);}catch{return send(res,400,{error:'Invalid checkout request.'});}
+   const objIdentity=await resolveIdentity(req);if(objIdentity)payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
+   const arrMenu=await pool.query('SELECT category,name,price_cents FROM menu_prices');
+   let data;try{data=validateOrder(payload,new Map(arrMenu.map(r=>[`${r.category}:${r.name}`,r.price_cents])));}catch(error){return send(res,400,{error:error.message});}
+   const conn=await pool.getConnection();try{await conn.query('INSERT INTO pending_checkouts(request_key,payload_json,total_cents) VALUES(?,?,?) ON DUPLICATE KEY UPDATE request_key=request_key',[payload.requestKey,JSON.stringify(payload),data.total]);}finally{conn.release();}
+   const [pending]=await pool.query('SELECT stripe_session_id FROM pending_checkouts WHERE request_key=?',[payload.requestKey]);
+   if(pending?.stripe_session_id){try{const existing=await stripeRequest(`checkout/sessions/${encodeURIComponent(pending.stripe_session_id)}`,null,'GET');if(existing.status==='open')return send(res,200,{url:existing.url});}catch{}}
+   const params=new URLSearchParams({mode:'payment',success_url:`${process.env.SITE_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${process.env.SITE_URL}/?checkout=cancelled`,customer_email:data.customer.email,client_reference_id:payload.requestKey,'metadata[request_key]':payload.requestKey});
+   data.items.forEach((item,index)=>{params.set(`line_items[${index}][price_data][currency]`,'usd');params.set(`line_items[${index}][price_data][unit_amount]`,String(item.unit));params.set(`line_items[${index}][price_data][product_data][name]`,item.description);params.set(`line_items[${index}][quantity]`,String(item.quantity));});
+   try{const session=await stripeRequest('checkout/sessions',params);await pool.query('UPDATE pending_checkouts SET stripe_session_id=? WHERE request_key=?',[session.id,payload.requestKey]);return send(res,200,{url:session.url});}catch{return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});}
+  }
+  if(req.method==='GET'&&url.pathname==='/api/checkout/verify'){
+   if(!process.env.STRIPE_SECRET_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable.'});
+   const sessionId=url.searchParams.get('session_id')||'';if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))return send(res,400,{error:'Invalid checkout session.'});
+   try{const session=await stripeRequest(`checkout/sessions/${encodeURIComponent(sessionId)}`,null,'GET');return send(res,200,await finishPaidCheckout(session));}catch{return send(res,402,{error:'Payment is not complete. Please finish checkout.'});}
+  }
   if (req.method==='GET' && url.pathname==='/api/menu') {
    const rows = await pool.query('SELECT category,name,price_cents FROM menu_prices');
    return send(res,200,rows);
@@ -82,10 +116,7 @@ const server = http.createServer(async(req,res)=>{
    if (!bSameOrigin) return send(res,403,{error:'Invalid request origin'});
   }
   if (req.method==='POST' && url.pathname==='/api/orders') {
-   let payload;
-   try {payload=await body(req);} catch {return send(res,400,{error:'Invalid JSON request (maximum 32 KB)'});}
-   try {return send(res,201,await createOrder(payload,await resolveIdentity(req)));}
-   catch (error) { if (error.message.startsWith('Please check')) return send(res,400,{error:error.message}); throw error; }
+   return send(res,402,{error:'Online payment is required before an order can be placed.'});
   }
   if (req.method==='GET' && url.pathname==='/api/orders/mine') {
    const objIdentity=await resolveIdentity(req);
