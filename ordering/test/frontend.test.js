@@ -13,27 +13,31 @@ function createHarness(bFail=false) {
  const mapWindowListeners=new Map();
  const objStorage=new Map();const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:'',assign(){}},sessionStorage:{setItem(k,v){objStorage.set(k,v)},getItem(k){return objStorage.get(k)||null},removeItem(k){objStorage.delete(k)}},URLSearchParams,crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
   if(strPath==='/api/menu')return {ok:true,json:async()=>[{category:'pizza',name:'Small',price_cents:1000},{category:'topping',name:'Cheese',price_cents:150},{category:'topping',name:'Pepperoni',price_cents:200}]};
+  if(strPath==='/api/payment/config')return {ok:true,json:async()=>({publishableKey:'pk_test_sample'})};
   if(strPath==='/api/session')return {ok:true,json:async()=>({authenticated:false,authReady:false,user:null})};
   if(strPath==='/api/orders/mine')return {ok:true,json:async()=>[]};
   arrRequests.push(JSON.parse(objOptions.body));
-  return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{url:'https://checkout.stripe.com/session'}};
- }};
+  if(strPath==='/api/payment/intent')return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{clientSecret:'pi_secret_sample'}};
+  return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{orderNumber:'LP-12',totalCents:1000,items:[{description:'Small Pizza',quantity:1,unit:1000}]}};
+ },Stripe(){return {elements(){return {create(){return {mount(){}}}}},confirmCardPayment:async()=>({paymentIntent:{id:'pi_sample'}})}}};
  vm.createContext(objContext);vm.runInContext(strScript,objContext);
  return {mapElements,arrRequests,objContext};
 }
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?demo=1&tab=ordering"/);
 });
-test('customer selections are sent to hosted online checkout',async()=>{
+test('customer enters card details in Stripe Elements and places a paid order',async()=>{
  const objHarness=createHarness();
  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','1234567890']])objHarness.mapElements.get(strId).value=strValue;
  objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+
  assert.equal(objHarness.arrRequests[0].customer.email,'ada@example.com');
  assert.equal(objHarness.arrRequests[0].pizzas[0].size,'Small');
- assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
- assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
+ assert.equal(objHarness.arrRequests[1].paymentIntentId,'pi_sample');
+ assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
+ assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-12');
  assert.equal(/cardNumber|cvv|expiry/.test(JSON.stringify(objHarness.arrRequests[0])),false);
 });
 test('failed submissions show an error and reuse the retry key',async()=>{
@@ -98,12 +102,13 @@ test('sign out clears the active role, returns home, and offers sign-in again',(
  assert.equal(objHarness.mapElements.get('home-page').classList.contains('hidden'),false);
  assert.match(objHarness.mapElements.get('auth-message').textContent,/signed out/i);
 });
-test('selected role does not bypass hosted payment or create an unpaid order',async()=>{
+test('selected role still requires payment confirmation before placing an order',async()=>{
  const objHarness=createHarness();
  vm.runInContext("selectDemoRole('customer')",objHarness.objContext);
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.equal(objHarness.arrRequests.length,1);
+ assert.equal(objHarness.arrRequests.length,2);
  assert.equal(objHarness.arrRequests[0].customer.email,'customer@luigispizza.com');
- assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
+ assert.equal(objHarness.arrRequests[1].paymentIntentId,'pi_sample');
+ assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
 });

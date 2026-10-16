@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS orders (
  status ENUM('received','preparing','ready','completed','cancelled') NOT NULL DEFAULT 'received',
  payment_method ENUM('pay_at_pickup','card') NOT NULL DEFAULT 'card',
  stripe_session_id VARCHAR(255) NULL UNIQUE,
+ stripe_payment_intent_id VARCHAR(255) NULL UNIQUE,
  total_cents INT UNSIGNED NOT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS orders (
 ) ENGINE=InnoDB;
 ALTER TABLE orders MODIFY payment_method ENUM('pay_at_pickup','card') NOT NULL DEFAULT 'card';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_session_id VARCHAR(255) NULL UNIQUE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255) NULL UNIQUE;
 CREATE TABLE IF NOT EXISTS order_items (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  order_id BIGINT UNSIGNED NOT NULL,
@@ -66,7 +68,9 @@ CREATE TABLE IF NOT EXISTS order_events (
 CREATE TABLE IF NOT EXISTS pending_checkouts (
  request_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
  stripe_session_id VARCHAR(255) NULL UNIQUE,
+ stripe_payment_intent_id VARCHAR(255) NULL UNIQUE,
  payload_json JSON NOT NULL,
  total_cents INT UNSIGNED NOT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+ALTER TABLE pending_checkouts ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255) NULL UNIQUE;

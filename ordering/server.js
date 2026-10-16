@@ -32,7 +32,7 @@ async function body(req) {
 async function rawBody(req) {
  let strRaw='';for await(const chunk of req){strRaw+=chunk;if(Buffer.byteLength(strRaw)>65536)throw new Error('Request too large');}return strRaw;
 }
-async function createOrder(payload,objIdentity=null,stripeSessionId=null) {
+async function createOrder(payload,objIdentity=null,stripePaymentIntentId=null,stripeSessionId=null) {
  const conn = await pool.getConnection();
  try {
   await conn.beginTransaction();
@@ -43,7 +43,7 @@ async function createOrder(payload,objIdentity=null,stripeSessionId=null) {
   // for the original transaction and then return its committed receipt.
   await conn.query('INSERT INTO customers(first_name,last_name,email,phone) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[data.customer.firstName,data.customer.lastName,data.customer.email,data.customer.phone]);
   const [customer] = await conn.query('SELECT id FROM customers WHERE email=?',[data.customer.email]);
-  const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents,payment_method,stripe_session_id) VALUES(?,?,?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total,'card',stripeSessionId]);
+  const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents,payment_method,stripe_session_id,stripe_payment_intent_id) VALUES(?,?,?,?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total,'card',stripeSessionId,stripePaymentIntentId]);
   await conn.query('UPDATE customers SET first_name=?,last_name=?,phone=? WHERE id=?',[data.customer.firstName,data.customer.lastName,data.customer.phone,customer.id]);
   for (const item of data.items) await conn.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[result.insertId,item.kind,item.description,item.quantity,item.unit]);
   await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,to_status,details) VALUES(?,?,'created','received','Order placed')",[result.insertId,objIdentity?.email || data.customer.email]);
@@ -74,8 +74,18 @@ async function finishPaidCheckout(session) {
  if(existing){const items=await pool.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[existing.id]);return {orderNumber:`LP-${existing.id}`,orderId:existing.id,totalCents:existing.total_cents,items};}
  const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_session_id=?',[session.metadata.request_key,session.id]);
  if(!pending||Number(session.amount_total)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
- const receipt=await createOrder(JSON.parse(pending.payload_json),null,session.id);
+ const receipt=await createOrder(JSON.parse(pending.payload_json),null,null,session.id);
  await pool.query('DELETE FROM pending_checkouts WHERE request_key=?',[session.metadata.request_key]);
+ return receipt;
+}
+async function finishPaidPaymentIntent(intent) {
+ if(intent.status!=='succeeded'||intent.currency!=='usd'||!intent.metadata?.request_key) throw new Error('Payment is not complete.');
+ const [existing]=await pool.query('SELECT id,total_cents FROM orders WHERE stripe_payment_intent_id=?',[intent.id]);
+ if(existing){const items=await pool.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[existing.id]);return {orderNumber:`LP-${existing.id}`,orderId:existing.id,totalCents:existing.total_cents,items};}
+ const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_payment_intent_id=?',[intent.metadata.request_key,intent.id]);
+ if(!pending||Number(intent.amount_received)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
+ const receipt=await createOrder(JSON.parse(pending.payload_json),null,intent.id);
+ await pool.query('DELETE FROM pending_checkouts WHERE request_key=?',[intent.metadata.request_key]);
  return receipt;
 }
 const server = http.createServer(async(req,res)=>{
@@ -100,7 +110,36 @@ const server = http.createServer(async(req,res)=>{
    if(!bSignatureValid)return send(res,400,{error:'Invalid webhook signature.'});
    let event;try{event=JSON.parse(strRaw);}catch{return send(res,400,{error:'Invalid webhook payload.'});}
    if(event.type==='checkout.session.completed'&&event.data?.object?.payment_status==='paid'){try{await finishPaidCheckout(event.data.object);}catch{return send(res,500,{error:'Paid order is awaiting processing.'});}}
+   if(event.type==='payment_intent.succeeded'){try{await finishPaidPaymentIntent(event.data.object);}catch{return send(res,500,{error:'Paid order is awaiting processing.'});}}
    return send(res,200,{received:true});
+  }
+  if(req.method==='GET'&&url.pathname==='/api/payment/config'){
+   if(!process.env.STRIPE_PUBLISHABLE_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
+   return send(res,200,{publishableKey:process.env.STRIPE_PUBLISHABLE_KEY});
+  }
+  if(req.method==='POST'&&url.pathname==='/api/payment/intent'){
+   if(!process.env.STRIPE_SECRET_KEY||!process.env.STRIPE_PUBLISHABLE_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
+   let payload;try{payload=await body(req);}catch{return send(res,400,{error:'Invalid checkout request.'});}
+   const objIdentity=await resolveIdentity(req);if(objIdentity)payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
+   const arrMenu=await pool.query('SELECT category,name,price_cents FROM menu_prices');
+   let data;try{data=validateOrder(payload,new Map(arrMenu.map(r=>[`${r.category}:${r.name}`,r.price_cents])));}catch(error){return send(res,400,{error:error.message});}
+   const conn=await pool.getConnection();try{await conn.query('INSERT INTO pending_checkouts(request_key,payload_json,total_cents) VALUES(?,?,?) ON DUPLICATE KEY UPDATE payload_json=VALUES(payload_json),total_cents=VALUES(total_cents)',[payload.requestKey,JSON.stringify(payload),data.total]);}finally{conn.release();}
+   const [pending]=await pool.query('SELECT stripe_payment_intent_id FROM pending_checkouts WHERE request_key=?',[payload.requestKey]);
+   if(pending?.stripe_payment_intent_id){
+    let existing;try{existing=await stripeRequest(`payment_intents/${encodeURIComponent(pending.stripe_payment_intent_id)}`,null,'GET');}catch{}
+    if(existing&&['requires_payment_method','requires_confirmation','requires_action'].includes(existing.status)){
+     if(existing.amount===data.total)return send(res,200,{clientSecret:existing.client_secret});
+     try{await stripeRequest(`payment_intents/${encodeURIComponent(existing.id)}/cancel`,new URLSearchParams(),'POST');}catch{return send(res,409,{error:'Your previous payment is still processing. Please wait a moment and try again.'});}
+    }
+   }
+   const params=new URLSearchParams({amount:String(data.total),currency:'usd','receipt_email':data.customer.email,'metadata[request_key]':payload.requestKey,'automatic_payment_methods[enabled]':'true'});
+   try{const intent=await stripeRequest('payment_intents',params);await pool.query('UPDATE pending_checkouts SET stripe_payment_intent_id=? WHERE request_key=?',[intent.id,payload.requestKey]);return send(res,200,{clientSecret:intent.client_secret});}catch{return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});}
+  }
+  if(req.method==='POST'&&url.pathname==='/api/payment/confirm'){
+   if(!process.env.STRIPE_SECRET_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable.'});
+   let bodyData;try{bodyData=await body(req);}catch{return send(res,400,{error:'Invalid payment confirmation.'});}
+   if(!/^pi_[A-Za-z0-9]+$/.test(bodyData.paymentIntentId||''))return send(res,400,{error:'Invalid payment confirmation.'});
+   try{return send(res,200,await finishPaidPaymentIntent(await stripeRequest(`payment_intents/${encodeURIComponent(bodyData.paymentIntentId)}`,null,'GET')));}catch{return send(res,402,{error:'Payment could not be verified. Please try again.'});}
   }
   if(req.method==='POST'&&url.pathname==='/api/checkout/session'){
    if(!process.env.STRIPE_SECRET_KEY||!process.env.SITE_URL)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});

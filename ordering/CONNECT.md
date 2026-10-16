@@ -38,7 +38,7 @@ npm test
 npm start
 ```
 
-Open `http://localhost:3000` to order and `/admin` for the staff queue. The backend saves the page's first name, last name, email, optional phone, pizzas with sizes and toppings, sides with quantities, and drinks with sizes and quantities. It calculates prices from MariaDB and returns the real order number to the confirmation page. The pickup checkout collects no card details.
+Open `http://localhost:3000` to order and `/admin` for the staff queue. The backend saves the page's first name, last name, email, optional phone, pizzas with sizes and toppings, sides with quantities, and drinks with sizes and quantities. It calculates prices from MariaDB and returns the real order number to the confirmation page. Stripe Elements presents the card number, expiration, and security-code fields on the payment page; card details go directly to Stripe and are not stored by this application.
 
 After placing an order, verify it in the Linux terminal:
 
