@@ -17,4 +17,7 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
  assert.ok(strHtml.includes('href="/admin/analytics?demo=1&tab=ordering"'));
  assert.ok(strHtml.includes('id="edit-items-editor"'));
  assert.ok(!strHtml.includes('id="edit-items"'));
+ assert.ok(!strHtml.includes('Accessible comparison values'));
+ assert.ok(!strHtml.includes('data table'));
+ assert.ok(strScript.includes("setAttribute('role','img')"));
 });

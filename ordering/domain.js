@@ -50,18 +50,18 @@ export function buildSyntheticAnalytics(strType, objNow = new Date()) {
   let nMetric = 0;
 
   if (strType === 'today') {
-    strTitle = 'Pizzas today';
-    strMetricLabel = `Simulated orders for ${dayStamp(objToday)}`;
+    strTitle = 'Today’s pizzas';
+    strMetricLabel = 'Today';
     nMetric = syntheticPizzas(objToday);
     arrPoints = [{label: 'Today', value: nMetric}];
   } else if (strType === 'comparison') {
-    strTitle = 'Yesterday compared with today';
-    strMetricLabel = 'Pizzas today';
+    strTitle = 'Pizzas · yesterday vs today';
+    strMetricLabel = 'Today';
     nMetric = syntheticPizzas(objToday);
     arrPoints = [{label: dayStamp(objYesterday), value: syntheticPizzas(objYesterday)}, {label: dayStamp(objToday), value: nMetric}];
   } else if (strType === 'weekdays') {
-    strTitle = 'Average by day of week';
-    strMetricLabel = 'Average pizzas per weekday over the last 8 weeks';
+    strTitle = 'Average by weekday';
+    strMetricLabel = '8-week weekday average';
     const arrTotals = Array(7).fill(0);
     const arrCounts = Array(7).fill(0);
     for (let nOffset = -55; nOffset <= 0; nOffset++) {
@@ -72,8 +72,8 @@ export function buildSyntheticAnalytics(strType, objNow = new Date()) {
     arrPoints = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((label, index) => ({label, value: Math.round(arrTotals[index] / arrCounts[index])}));
     nMetric = Math.round(arrPoints.reduce((nSum, objPoint) => nSum + objPoint.value, 0) / arrPoints.length);
   } else if (strType === 'average') {
-    strTitle = 'Daily average';
-    strMetricLabel = 'Average pizzas per day over the last 30 days';
+    strTitle = 'Daily average · 30 days';
+    strMetricLabel = '30-day average';
     arrPoints = Array.from({length: 30}, (_, index) => {
       const objDate = addDays(objToday, index - 29);
       return {label: dayStamp(objDate), value: syntheticPizzas(objDate)};
@@ -81,7 +81,7 @@ export function buildSyntheticAnalytics(strType, objNow = new Date()) {
     nMetric = Math.round(arrPoints.reduce((nSum, objPoint) => nSum + objPoint.value, 0) / arrPoints.length);
   } else if (strType === 'monthly') {
     strTitle = 'Monthly pizzas';
-    strMetricLabel = 'Simulated monthly totals through today';
+    strMetricLabel = 'This month';
     arrPoints = Array.from({length: 6}, (_, index) => {
       const nMonthOffset = index - 5;
       const objMonth = new Date(Date.UTC(objToday.getUTCFullYear(), objToday.getUTCMonth() + nMonthOffset, 1));
