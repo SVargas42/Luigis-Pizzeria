@@ -18,15 +18,16 @@ function createHarness(bFail=false) {
   if(strPath==='/api/orders/mine')return {ok:true,json:async()=>[]};
   arrRequests.push(JSON.parse(objOptions.body));
   if(strPath==='/api/payment/intent')return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{clientSecret:'pi_secret_sample'}};
-  return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{orderNumber:'LP-12',totalCents:1000,items:[{description:'Small Pizza',quantity:1,unit:1000}]}};
+  return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{orderNumber:'LP-12',subtotalCents:1000,taxCents:0,totalCents:1000,paymentMethod:'in_store',paymentStatus:'unpaid',trackerUrl:'/track?token=abc',items:[{description:'Small Pizza',quantity:1,unit:1000}]}};
  },Stripe(){return {elements(){return {create(){return {mount(){}}}}},confirmCardPayment:async()=>({paymentIntent:{id:'pi_sample'}})}}};
  vm.createContext(objContext);vm.runInContext(strScript,objContext);
+ for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','5551234567'],['payment-method','in_store']])objContext.document.getElementById(strId).value=strValue;
  return {mapElements,arrRequests,objContext};
 }
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?demo=1&tab=ordering"/);
 });
-test('customer enters card details in Stripe Elements and places a paid order',async()=>{
+test('customer places pickup order and sees an itemized receipt and tracker',async()=>{
  const objHarness=createHarness();
  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','1234567890']])objHarness.mapElements.get(strId).value=strValue;
  objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});
@@ -35,7 +36,8 @@ test('customer enters card details in Stripe Elements and places a paid order',a
 
  assert.equal(objHarness.arrRequests[0].customer.email,'ada@example.com');
  assert.equal(objHarness.arrRequests[0].pizzas[0].size,'Small');
- assert.equal(objHarness.arrRequests[1].paymentIntentId,'pi_sample');
+ assert.equal(objHarness.arrRequests[0].paymentMethod,'in_store');
+ assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=abc');
  assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
  assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-12');
  assert.equal(/cardNumber|cvv|expiry/.test(JSON.stringify(objHarness.arrRequests[0])),false);
@@ -59,7 +61,7 @@ test('menu topping labels and totals follow individual database prices',async()=
 });
 test('signed-in customer skips the guest details step and receives the Orders entry',()=>{
  const objHarness=createHarness();
- objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'customer-7',role:'customer',email:'ada@example.com',firstName:'Ada',lastName:'Lovelace',phone:''}});
+ objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'customer-7',role:'customer',email:'ada@example.com',firstName:'Ada',lastName:'Lovelace',phone:'5551234567'}});
  objHarness.mapElements.get('start-order').handlers.click();
  assert.equal(vm.runInContext('state.step',objHarness.objContext),2);
  assert.equal(objHarness.mapElements.get('firstName').value,'Ada');
@@ -102,13 +104,31 @@ test('sign out clears the active role, returns home, and offers sign-in again',(
  assert.equal(objHarness.mapElements.get('home-page').classList.contains('hidden'),false);
  assert.match(objHarness.mapElements.get('auth-message').textContent,/signed out/i);
 });
-test('selected role still requires payment confirmation before placing an order',async()=>{
+test('selected role submits mock online payment without collecting card details',async()=>{
  const objHarness=createHarness();
  vm.runInContext("selectDemoRole('customer')",objHarness.objContext);
+ objHarness.mapElements.get('phone').value='5551234567';objHarness.mapElements.get('payment-method').value='online';
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.equal(objHarness.arrRequests.length,2);
+ assert.equal(objHarness.arrRequests.length,1);
  assert.equal(objHarness.arrRequests[0].customer.email,'customer@luigispizza.com');
- assert.equal(objHarness.arrRequests[1].paymentIntentId,'pi_sample');
+ assert.equal(objHarness.arrRequests[0].paymentMethod,'online');
  assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
+});
+
+
+test('signed-in account without phone can enter the required contact details',()=>{
+ const objHarness=createHarness();
+ objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'customer-8',role:'customer',email:'ada@example.com',firstName:'Ada',lastName:'Lovelace',phone:''}});
+ objHarness.mapElements.get('start-order').handlers.click();
+ assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
+ assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),false);
+});
+
+
+test('admin Orders navigation opens the authenticated live queue',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("selectDemoRole('admin')",objHarness.objContext);
+ objHarness.mapElements.get('orders-button').handlers.click();
+ assert.equal(objHarness.objContext.location.href,'/admin?tab=current');
 });

@@ -1,0 +1,9 @@
+.lifecycle-test-deps/
+.python-deps/
+.venv/
+.venv-lifecycle/
+__pycache__/
+.pytest_cache/
+.deployment-work/
+luigis-lifecycle-deployment.zip
+lifecycle-manifest.json

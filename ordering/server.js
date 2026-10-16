@@ -170,8 +170,18 @@ const server = http.createServer(async(req,res)=>{
    try {bSameOrigin=Boolean(origin) && new URL(origin).host===req.headers.host;} catch {}
    if (!bSameOrigin) return send(res,403,{error:'Invalid request origin'});
   }
-  if (req.method==='POST' && url.pathname==='/api/orders') {
-   return send(res,402,{error:'Online payment is required before an order can be placed.'});
+  const bLifecycleRoute=(req.method==='POST'&&url.pathname==='/api/orders') || /^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
+  if(bLifecycleRoute){
+   if(url.pathname.startsWith('/api/employee/')&&!await isAdminRequest(req)){
+    res.setHeader('WWW-Authenticate','Basic realm="Luigi staff"');return send(res,401,{error:'Staff credentials required'});
+   }
+   const strPayload=['POST','PATCH'].includes(req.method)?JSON.stringify(await body(req)):undefined;
+   // Only the local lifecycle service receives staff credentials; never forward a client-controlled host.
+   const objResponse=await fetch(new URL(url.pathname,process.env.LIFECYCLE_URL||'http://127.0.0.1:8000'),{
+    method:req.method,headers:{'Content-Type':'application/json',...(url.pathname.startsWith('/api/employee/')?{Authorization:'Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64')}:{})},
+    body:strPayload,signal:AbortSignal.timeout(12000)
+   });
+   return send(res,objResponse.status,await objResponse.json());
   }
   if (req.method==='GET' && url.pathname==='/api/orders/mine') {
    const objIdentity=await resolveIdentity(req);
@@ -203,7 +213,7 @@ const server = http.createServer(async(req,res)=>{
   }
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,buildSyntheticEmployeeData());
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,buildSyntheticBusinessData());
-  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js'};
+  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js'};
   if (req.method==='GET' && mapBrowserModules[url.pathname]) {
    const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));
    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(strSource);
@@ -222,8 +232,9 @@ const server = http.createServer(async(req,res)=>{
    const conn=await pool.getConnection();
    try {
     await conn.beginTransaction();
-    const [objOrder]=await conn.query('SELECT status FROM orders WHERE id=? FOR UPDATE',[match[1]]);
+    const [objOrder]=await conn.query('SELECT status,tracking_status FROM orders WHERE id=? FOR UPDATE',[match[1]]);
     if(!objOrder){await conn.rollback();return send(res,404,{error:'Order not found.'});}
+    if(objOrder.tracking_status){await conn.rollback();return send(res,409,{error:'Use the lifecycle controls for this order.'});}
     if(!canTransitionStatus(objOrder.status,status)){await conn.rollback();return send(res,409,{error:'Order changed or transition is not allowed. Refresh the queue.'});}
     await conn.query('UPDATE orders SET status=? WHERE id=?',[status,match[1]]);
     await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(?,?,'status_changed',?,?,?)",[match[1],(await resolveIdentity(req))?.email || 'staff',objOrder.status,status,`Status changed to ${status}`]);
@@ -238,8 +249,9 @@ const server = http.createServer(async(req,res)=>{
    const conn=await pool.getConnection();
    try{
     await conn.beginTransaction();
-    const [objOrder]=await conn.query('SELECT status FROM orders WHERE id=? FOR UPDATE',[editMatch[1]]);
+    const [objOrder]=await conn.query('SELECT status,tracking_status FROM orders WHERE id=? FOR UPDATE',[editMatch[1]]);
     if(!objOrder){await conn.rollback();return send(res,404,{error:'Order not found.'});}
+    if(objOrder.tracking_status){await conn.rollback();return send(res,409,{error:'Lifecycle receipts cannot be edited.'});}
     if(!['received','preparing','ready'].includes(objOrder.status)){await conn.rollback();return send(res,409,{error:'Only active orders can be edited.'});}
     const arrMenu=await conn.query('SELECT category,name,price_cents FROM menu_prices');
     let arrItems;
@@ -255,7 +267,7 @@ const server = http.createServer(async(req,res)=>{
     return send(res,200,{items:arrItems,totalCents:nTotal});
    }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
-  const pages={'/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
+  const pages={'/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
   if (req.method==='GET' && pages[url.pathname]) {
    const html=await readFile(new URL(url.pathname==='/'?'../index.html':`./public/${pages[url.pathname]}`,import.meta.url));
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(html);

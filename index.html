@@ -86,7 +86,7 @@
 
     <section class="panel" id="step-1" aria-labelledby="details-title">
       <div class="section-label" data-step-label="1">Step 1 of 4</div><h2 class="panel-title" id="details-title" tabindex="-1"><span class="visually-hidden" data-step-heading="1">Step 1 of 4: </span>Let's get to know you</h2><p class="panel-subtitle">Who are we making this delicious order for?</p><p class="form-instructions">Name and email are required. Phone is optional.</p>
-      <form id="customer-form" novalidate><div class="mb-3"><label class="form-label" for="phone">Phone (optional)</label><input class="form-control" id="phone" type="tel" autocomplete="tel" maxlength="30" pattern="[0-9+() .\-]*"><p class="form-text">We store your name, email, and optional phone to fulfill orders and maintain your order history.</p></div>
+      <form id="customer-form" novalidate><div class="mb-3"><label class="form-label" for="phone">Phone</label><input class="form-control" id="phone" type="tel" required minlength="7" autocomplete="tel" maxlength="30" pattern="[0-9+() .\-]*"><p class="form-text">We store your name, email, and phone to fulfill orders and maintain your order history.</p></div>
         <div class="row g-3"><div class="col-md-6"><label class="form-label" for="firstName">First name</label><input class="form-control" id="firstName" name="firstName" autocomplete="given-name" required aria-describedby="firstName-error"><div class="invalid-feedback" id="firstName-error">Please enter your first name.</div></div>
           <div class="col-md-6"><label class="form-label" for="lastName">Last name</label><input class="form-control" id="lastName" name="lastName" autocomplete="family-name" required aria-describedby="lastName-error"><div class="invalid-feedback" id="lastName-error">Please enter your last name.</div></div>
           <div class="col-md-8"><label class="form-label" for="email">Email address</label><input class="form-control" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="email-error"><div class="invalid-feedback" id="email-error">Enter a valid email address.</div></div></div>
@@ -107,29 +107,27 @@
     </section>
 
     <section class="panel hidden" id="step-3" aria-labelledby="payment-title">
-      <div class="section-label" data-step-label="3">Step 3 of 4</div><h2 class="panel-title" id="payment-title" tabindex="-1"><span class="visually-hidden" data-step-heading="3">Step 3 of 4: </span>Payment</h2><p class="panel-subtitle">Enter your card details to pay securely and place your pickup order.</p>
-      <div class="payment-total"><span>Order total</span><strong id="payment-total">$0.00</strong></div>
-      <form id="payment-form"><div class="row g-3 mb-3"><div class="col-12"><div class="form-label" id="card-number-label">Card number</div><div class="form-control stripe-card-field" id="card-number-element" role="group" aria-labelledby="card-number-label" aria-describedby="card-number-help"></div><div class="form-text" id="card-number-help">Your card details are encrypted and processed securely.</div></div><div class="col-sm-6"><div class="form-label" id="card-expiry-label">Expiration date</div><div class="form-control stripe-card-field" id="card-expiry-element" role="group" aria-labelledby="card-expiry-label"></div></div><div class="col-sm-6"><div class="form-label" id="card-cvc-label">Security code</div><div class="form-control stripe-card-field" id="card-cvc-element" role="group" aria-labelledby="card-cvc-label"></div></div><div class="col-sm-6"><label class="form-label" for="billing-zip">Billing ZIP code</label><input class="form-control" id="billing-zip" name="billingZip" autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" required aria-describedby="billing-zip-error"><div class="invalid-feedback" id="billing-zip-error">Enter a 5-digit billing ZIP code.</div></div></div><p id="order-error" class="alert-inline" role="alert" aria-live="polite"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Place Order →</button></div></form>
+      <div class="section-label" data-step-label="3">Step 3 of 4</div><h2 class="panel-title" id="payment-title" tabindex="-1"><span class="visually-hidden" data-step-heading="3">Step 3 of 4: </span>Payment</h2><p class="panel-subtitle">Choose mock online payment or pay when you pick up your order.</p>
+      <div class="payment-total"><span>Subtotal (tax calculated when placed)</span><strong id="payment-total">$0.00</strong></div>
+      <form id="payment-form"><div class="mb-3"><label class="form-label" for="payment-method">Payment method</label><select class="form-select" id="payment-method" required aria-describedby="payment-help"><option value="in_store">Pay at Pickup</option><option value="online">Pay Online (mock)</option></select><p class="form-text" id="payment-help">Online payment is a placeholder. No card is charged. Pickup payment is due in store.</p></div><p id="order-error" class="alert-inline" role="alert" aria-live="polite"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Place Order →</button></div></form>
     </section>
 
     <section class="panel hidden" id="step-4" aria-labelledby="confirm-title">
       <div class="confirmation"><div class="confirm-icon" aria-hidden="true">✓</div><div class="section-label" data-step-label="4">Step 4 of 4 · Order confirmed</div><h2 id="confirm-title" tabindex="-1"><span class="visually-hidden" data-step-heading="4">Step 4 of 4: </span>Thank You for Ordering from Luigi's Pizza!</h2><p>We’re firing up the oven. Your order details are right here.</p>
-        <div class="order-meta"><div class="meta-box"><div class="meta-label">Order number</div><div class="meta-value" id="order-number"></div></div><div class="meta-box"><div class="meta-label">Estimated time</div><div class="meta-value">30–45 minutes</div></div><div class="meta-box"><div class="meta-label">Order for</div><div class="meta-value" id="confirm-name"></div></div></div>
+        <div class="order-meta"><div class="meta-box"><div class="meta-label">Order number</div><div class="meta-value" id="order-number"></div></div><div class="meta-box"><div class="meta-label">Estimated time</div><div class="meta-value">Awaiting kitchen confirmation…</div></div><div class="meta-box"><div class="meta-label">Order for</div><div class="meta-value" id="confirm-name"></div></div></div>
         <div class="text-start mb-3"><div class="meta-label">Contact email</div><div class="meta-value" id="confirm-email"></div></div>
-        <div class="receipt"><h3>Your receipt</h3><div class="summary-lines" id="receipt-lines"></div><div class="receipt-detail" id="receipt-details"></div><div class="summary-total"><span>Total</span><strong id="receipt-total">$0.00</strong></div></div>
+        <div class="receipt card card-body"><h3>Your receipt</h3><div class="summary-lines" id="receipt-lines"></div><div class="receipt-detail" id="receipt-details"></div><p id="receipt-contact"></p><p>Subtotal: <span id="receipt-subtotal"></span> · Tax: <span id="receipt-tax"></span></p><a class="btn btn-primary" id="receipt-tracker" href="/track">Track your pizza</a><div class="summary-total"><span>Total</span><strong id="receipt-total">$0.00</strong></div></div>
         <div class="d-flex justify-content-center flex-wrap gap-2 mt-3"><button class="btn btn-primary" type="button" id="new-order">Start a New Order</button><button class="btn btn-outline-secondary" type="button" id="confirmation-home">Back to Home</button></div>
       </div>
     </section>
     </div>
   </main>
 
-  <script src="https://js.stripe.com/v3/"></script>
   <script>
-    // Stripe Elements collect payment fields in Stripe-hosted iframes; raw card data never reaches this app.
     let prices = {pizza:{Small:10,Medium:13,Large:16},topping:1.5,sides:{None:0,Breadsticks:5,'Pizza Bites':6},drinks:{Small:2,Medium:2.75,Large:3.5}};
     let objToppingPrices = Object.fromEntries(['Cheese','Pepperoni','Sausage','Pineapple','Olives','Barbeque Chicken'].map(strName=>[strName,1.5]));
     let toppingChoices = ['Cheese','Pepperoni','Sausage','Pineapple','Olives','Barbeque Chicken'];
-    let nextPizzaId=1,nextDrinkId=1, requestKey=null, submitting=false, stripe=null, stripeElements=null, cardNumberElement=null, cardExpiryElement=null, cardCvcElement=null, paymentFieldsReady=false;
+    let nextPizzaId=1,nextDrinkId=1, requestKey=null, submitting=false;
     const state = {step:1,customer:{firstName:'',lastName:'',email:'',phone:''},pizzas:[{id:nextPizzaId++,size:null,toppings:[]}],activePizzaId:1,sides:[],drinks:[]};
     const objAuthState = {user:null,ready:false,demo:false};
     const $ = (id) => document.getElementById(id);
@@ -220,46 +218,35 @@
     function renderSummary(){const markup=summaryMarkup()||'<div class="empty-cart">Choose a size for at least one pizza to begin.</div>';$('menu-summary-lines').innerHTML=markup;$('menu-total').textContent=money(total());$('payment-total').textContent=money(total());$('receipt-lines').innerHTML=summaryMarkup();$('receipt-total').textContent=money(total());$('receipt-details').textContent='';}
     function renderAll(){renderPizzas();renderExtras();renderSummary()}
     function scrollToPageTop(){window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
+    function canSkipContactDetails(){return Boolean(objAuthState.user&&state.customer.firstName&&state.customer.lastName&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.customer.email)&&state.customer.phone.replace(/\D/g,'').length>=7);}
     function updateProgress(){
-      const nTotalSteps=objAuthState.user?3:4;
+      const nTotalSteps=canSkipContactDetails()?3:4;
       document.querySelectorAll('[data-step-indicator]').forEach(el=>{
-        const nStep=Number(el.dataset.stepIndicator),bHidden=Boolean(objAuthState.user)&&nStep===1;
+        const nStep=Number(el.dataset.stepIndicator),bHidden=Boolean(canSkipContactDetails())&&nStep===1;
         el.classList.toggle('hidden',bHidden);
-        const nDisplay=objAuthState.user?nStep-1:nStep;
+        const nDisplay=canSkipContactDetails()?nStep-1:nStep;
         const bActive=nStep===state.step,bDone=nStep<state.step;
         el.classList.toggle('active',bActive);el.classList.toggle('done',bDone);
         if(bActive)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');
         const objDot=el.querySelector('.step-dot');if(objDot)objDot.textContent=bDone?'✓':nDisplay;
       });
-      document.querySelectorAll('[data-step-label]').forEach(el=>{const nStep=Number(el.dataset.stepLabel),nDisplay=nStep-(objAuthState.user?1:0);el.textContent=nStep===4?`Step ${nDisplay} of ${nTotalSteps} · Order confirmed`:`Step ${nDisplay} of ${nTotalSteps}`;});
-      document.querySelectorAll('[data-step-heading]').forEach(el=>{const nStep=Number(el.dataset.stepHeading);el.textContent=`Step ${nStep-(objAuthState.user?1:0)} of ${nTotalSteps}: `;});
+      document.querySelectorAll('[data-step-label]').forEach(el=>{const nStep=Number(el.dataset.stepLabel),nDisplay=nStep-(canSkipContactDetails()?1:0);el.textContent=nStep===4?`Step ${nDisplay} of ${nTotalSteps} · Order confirmed`:`Step ${nDisplay} of ${nTotalSteps}`;});
+      document.querySelectorAll('[data-step-heading]').forEach(el=>{const nStep=Number(el.dataset.stepHeading);el.textContent=`Step ${nStep-(canSkipContactDetails()?1:0)} of ${nTotalSteps}: `;});
     }
     function goTo(step){
       state.step=step;
-      document.querySelectorAll('[id^="step-"]').forEach(el=>el.classList.toggle('hidden',el.id!==`step-${step}`||(objAuthState.user&&el.id==='step-1')));
+      document.querySelectorAll('[id^="step-"]').forEach(el=>el.classList.toggle('hidden',el.id!==`step-${step}`));
       updateProgress();
       $(`${['','details-title','menu-title','payment-title','confirm-title'][step]}`).focus({preventScroll:true});scrollToPageTop();
-      if(step===3)initializePaymentFields();
+
     }
-    async function initializePaymentFields(){
-      if(paymentFieldsReady)return;
-      try{
-        const objResponse=await fetch('/api/payment/config'),objConfig=await objResponse.json();
-        if(!objResponse.ok||!objConfig.publishableKey)throw Error(objConfig.error||'Card payment is temporarily unavailable.');
-        if(typeof Stripe!=='function')throw Error('Secure card entry could not be loaded. Please refresh and try again.');
-        stripe=Stripe(objConfig.publishableKey);stripeElements=stripe.elements();
-        cardNumberElement=stripeElements.create('cardNumber',{style:{base:{fontFamily:'DM Sans, sans-serif',fontSize:'16px',color:'#292720','::placeholder':{color:'#6f6a60'}},invalid:{color:'#a92d25'}},'aria-label':'Card number'});
-        cardExpiryElement=stripeElements.create('cardExpiry',{style:{base:{fontFamily:'DM Sans, sans-serif',fontSize:'16px',color:'#292720','::placeholder':{color:'#6f6a60'}}},'aria-label':'Expiration date'});
-        cardCvcElement=stripeElements.create('cardCvc',{style:{base:{fontFamily:'DM Sans, sans-serif',fontSize:'16px',color:'#292720','::placeholder':{color:'#6f6a60'}}},'aria-label':'Security code'});
-        cardNumberElement.mount('card-number-element');cardExpiryElement.mount('card-expiry-element');cardCvcElement.mount('card-cvc-element');paymentFieldsReady=true;
-      }catch(error){$('order-error').textContent=error.message||'Card payment is temporarily unavailable.';}
-    }
+
     function showHome(){ $('home-page').classList.remove('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');history.replaceState(null,'',location.pathname+location.search);$('home-title').focus({preventScroll:true});scrollToPageTop(); }
     function showOrders(){
-      if(objAuthState.user?.role==='admin'){location.href='/admin?demo=1&tab=current';return;}
+      if(objAuthState.user?.role==='admin'){location.href='/admin?tab=current';return;}
       $('home-page').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');$('orders-portal').classList.remove('hidden');$('customer-orders-panel').classList.add('hidden');$('customer-orders-error').textContent='';$('orders-title').focus({preventScroll:true});scrollToPageTop();
     }
-    function startOrder(){ $('home-page').classList.add('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.remove('hidden');$('order-hero').classList.remove('hidden');goTo(objAuthState.user?2:1);history.replaceState(null,'','#order'); }
+    function startOrder(){ $('home-page').classList.add('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.remove('hidden');$('order-hero').classList.remove('hidden');goTo(canSkipContactDetails()?2:1);history.replaceState(null,'','#order'); }
     function renderCustomerOrders(arrOrders){
       const objList=$('customer-orders-list');objList.replaceChildren();
       if(!arrOrders.length){const objEmpty=document.createElement('p');objEmpty.className='empty-cart';objEmpty.textContent='No orders have been placed on this account yet.';objList.append(objEmpty);return;}
@@ -289,7 +276,7 @@
       catch(error){$('customer-orders-error').textContent=error.message||'Unable to load orders.';}
     }
     function setInvalid(input,invalid){input.classList.toggle('is-invalid',invalid);input.setAttribute('aria-invalid',String(invalid));}
-    function validateCustomer(){let valid=true;const phone=$('phone');setInvalid(phone,!phone.checkValidity());if(!phone.checkValidity())valid=false;['firstName','lastName','email'].forEach(id=>{const el=$(id);const max=id==='email'?254:80;const bad=!el.value.trim()||el.value.trim().length>max||(id==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value.trim()));setInvalid(el,bad);if(bad)valid=false});return valid}
+    function validateCustomer(){let valid=true;const phone=$('phone');setInvalid(phone,!phone.checkValidity());if(!phone.checkValidity()||phone.value.replace(/\D/g,'').length<7){setInvalid(phone,true);valid=false};['firstName','lastName','email'].forEach(id=>{const el=$(id);const max=id==='email'?254:80;const bad=!el.value.trim()||el.value.trim().length>max||(id==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value.trim()));setInvalid(el,bad);if(bad)valid=false});return valid}
     $('customer-form').addEventListener('submit',event=>{event.preventDefault();if(!validateCustomer()){$('customer-form').querySelector('.is-invalid')?.focus();return}state.customer={firstName:$('firstName').value.trim(),lastName:$('lastName').value.trim(),email:$('email').value.trim(),phone:$('phone').value.trim()};goTo(2)});
     ['firstName','lastName','email','phone'].forEach(id=>$(id).addEventListener('input',event=>{if(event.target.classList.contains('is-invalid'))setInvalid(event.target,false)}));
     $('start-order').addEventListener('click',startOrder);
@@ -307,39 +294,28 @@
     $('add-pizza').addEventListener('click',()=>{const pizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas.push(pizza);state.activePizzaId=pizza.id;renderAll();const card=$('pizzas-container').lastElementChild;card?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});card?.querySelector('.toggle-pizza')?.focus({preventScroll:true})});
     $('add-drink').addEventListener('click',()=>{const drink={id:nextDrinkId++,name:'',size:'',quantity:1};state.drinks.push(drink);renderAll();const row=$('drinks-list').lastElementChild;row?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});row?.querySelector('.drink-name-select')?.focus({preventScroll:true})});
     document.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>{const nTarget=Number(button.dataset.go);if(nTarget===1&&objAuthState.user)showHome();else goTo(nTarget)}));
-    $('payment-form').addEventListener('submit',async event=>{
-      event.preventDefault();if(submitting)return;
-      const zip=$('billing-zip');if(!zip.checkValidity()){zip.classList.add('is-invalid');zip.setAttribute('aria-invalid','true');zip.focus();return;}zip.classList.remove('is-invalid');zip.removeAttribute('aria-invalid');
-      submitting=true;$('place-order').disabled=true;$('order-error').textContent='Preparing secure payment…';
+    $('payment-form').addEventListener('submit',async objEvent=>{
+      objEvent.preventDefault();if(submitting)return;
+      if(!validateCustomer()){$('order-error').textContent='Enter your name, email and phone before placing the order.';goTo(1);return;}
+      state.customer={firstName:$('firstName').value.trim(),lastName:$('lastName').value.trim(),email:$('email').value.trim(),phone:$('phone').value.trim()};
+      submitting=true;$('place-order').disabled=true;$('order-error').textContent='Placing your order…';
       requestKey ||= crypto.randomUUID();
-      try {
-        await initializePaymentFields();if(!paymentFieldsReady)throw Error($('order-error').textContent||'Card payment is temporarily unavailable.');
-        const payload={requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks};sessionStorage.setItem('luigis-pending-checkout',JSON.stringify(payload));
-        const objIntentResponse=await fetch('/api/payment/intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const objIntent=await objIntentResponse.json();if(!objIntentResponse.ok)throw Error(objIntent.error||'Unable to prepare payment.');
-        $('order-error').textContent='Processing your payment…';
-        const objPayment=await stripe.confirmCardPayment(objIntent.clientSecret,{payment_method:{card:cardNumberElement,billing_details:{name:`${state.customer.firstName} ${state.customer.lastName}`.trim(),email:state.customer.email,address:{postal_code:zip.value}}}});
-        if(objPayment.error)throw Error(objPayment.error.message||'Your card could not be processed. Check the details and try again.');
-        const objReceiptResponse=await fetch('/api/payment/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paymentIntentId:objPayment.paymentIntent.id})});const objReceipt=await objReceiptResponse.json();if(!objReceiptResponse.ok)throw Error(objReceipt.error||'Payment confirmation is still processing. Please retry shortly.');
-        showPaidOrder(objReceipt,state.customer);sessionStorage.removeItem('luigis-pending-checkout');requestKey=null;goTo(4);
-      }catch(error){$('order-error').textContent=error.message || 'Unable to place your order. Please retry.';}finally{submitting=false;$('place-order').disabled=false;}
+      try{
+        const objPayload={requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks,paymentMethod:$('payment-method').value};
+        const objResponse=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(objPayload)});
+        const objReceipt=await objResponse.json();if(!objResponse.ok)throw Error(objReceipt.error||'Unable to place order.');
+        showPaidOrder(objReceipt,state.customer);requestKey=null;goTo(4);
+      }catch(objError){$('order-error').textContent=objError.message||'Unable to place order. Retry shortly.';}
+      finally{submitting=false;$('place-order').disabled=false;}
     });
     function showPaidOrder(order,customer){
-      $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=`${customer.firstName} ${customer.lastName}`;$('confirm-email').textContent=customer.email;$('receipt-lines').replaceChildren();
+      $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=order.customer?.name||`${customer.firstName} ${customer.lastName}`;$('confirm-email').textContent=order.customer?.email||customer.email;$('receipt-lines').replaceChildren();
       for(const item of order.items){const row=document.createElement('div');row.className='summary-line';const name=document.createElement('span'),value=document.createElement('span');name.textContent=`${item.description} × ${item.quantity}`;value.textContent=money(item.unit*item.quantity/100);row.append(name,value);$('receipt-lines').append(row)}
-      $('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent='Paid online · Pickup';$('order-error').textContent='';
+      $('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent=order.paymentMethod==='online'?'Pay Online · Mock payment pending (no charge)':'Pay at Pickup · Unpaid';$('receipt-contact').textContent=`${order.customer?.name||customer.firstName+' '+customer.lastName} · ${order.customer?.email||customer.email} · ${order.customer?.phone||customer.phone}`;$('receipt-subtotal').textContent=money(order.subtotalCents/100);$('receipt-tax').textContent=money(order.taxCents/100);$('receipt-tracker').href=order.trackerUrl;$('order-error').textContent='';
     }
-    $('new-order').addEventListener('click',()=>{requestKey=null;state.customer=objAuthState.user?{firstName:objAuthState.user.firstName,lastName:objAuthState.user.lastName,email:objAuthState.user.email,phone:objAuthState.user.phone}:{firstName:'',lastName:'',email:'',phone:''};const objPizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas=[objPizza];state.activePizzaId=objPizza.id;state.sides=[];state.drinks=[];$('customer-form').reset();if(objAuthState.user){$('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;}$('payment-form').reset();document.querySelectorAll('.is-invalid').forEach(el=>setInvalid(el,false));$('menu-error').textContent='';renderAll();goTo(objAuthState.user?2:1)});
+    $('new-order').addEventListener('click',()=>{requestKey=null;state.customer=objAuthState.user?{firstName:objAuthState.user.firstName,lastName:objAuthState.user.lastName,email:objAuthState.user.email,phone:objAuthState.user.phone}:{firstName:'',lastName:'',email:'',phone:''};const objPizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas=[objPizza];state.activePizzaId=objPizza.id;state.sides=[];state.drinks=[];$('customer-form').reset();if(objAuthState.user){$('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;}$('payment-form').reset();document.querySelectorAll('.is-invalid').forEach(el=>setInvalid(el,false));$('menu-error').textContent='';renderAll();goTo(canSkipContactDetails()?2:1)});
     $('confirmation-home').addEventListener('click',showHome);
-    async function finishReturnedCheckout(){
-      if(!location.search.includes('checkout='))return;
-      const params=new URLSearchParams(location.search);const status=params.get('checkout');if(!status)return;
-      if(status==='cancelled'){$('order-error').textContent='Checkout was cancelled. Your order has not been placed.';goTo(3);history.replaceState({},'', '/');return;}
-      if(status!=='success')return;
-      $('order-error').textContent='Verifying payment…';const strSaved=sessionStorage.getItem('luigis-pending-checkout');
-      try{const payload=JSON.parse(strSaved||'{}');const response=await fetch(`/api/checkout/verify?session_id=${encodeURIComponent(params.get('session_id')||'')}`);const order=await response.json();if(!response.ok)throw Error(order.error||'Payment could not be verified.');
-        $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=`${payload.customer.firstName} ${payload.customer.lastName}`;$('confirm-email').textContent=payload.customer.email;$('receipt-lines').replaceChildren();for(const item of order.items){const row=document.createElement('div');row.className='summary-line';const name=document.createElement('span'),value=document.createElement('span');name.textContent=`${item.description} × ${item.quantity}`;value.textContent=money(item.unit*item.quantity/100);row.append(name,value);$('receipt-lines').append(row)}$('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent='Paid online · Pickup';$('order-error').textContent='';sessionStorage.removeItem('luigis-pending-checkout');requestKey=null;goTo(4);
-      }catch(error){$('order-error').textContent=error.message||'Payment verification is taking longer than expected. Refresh to check again.';goTo(3);}finally{history.replaceState({},'', '/');}
-    }
+
     $('start-order').disabled=true;
     fetch('/api/menu').then(async response=>{if(!response.ok)throw Error('Menu unavailable');return response.json()}).then(rows=>{
       prices={pizza:{},topping:0,sides:{None:0},drinks:{}};toppingChoices=[];objToppingPrices={};
@@ -348,7 +324,7 @@
     }).catch(()=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent='Ordering is currently unavailable. Please call the restaurant.';$('start-order').after(p)});
     fetch('/api/session').then(async objResponse=>{const objSession=await objResponse.json();if(!objAuthState.demo)setAuthState(objSession)}).catch(()=>{if(!objAuthState.demo)setAuthState({authenticated:false,authReady:false})});
     renderAll();
-    finishReturnedCheckout();
+
   </script>
 </body>
 </html>

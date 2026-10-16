@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
@@ -80,8 +81,9 @@
       objPanel.hidden=!bPageMatch;
       objPanel.classList.toggle('active',bPageMatch&&objPanel.id===(bAnalyticsPage?'panel-ordering':'panel-current'));
     }
-    const objStatusLabels = {received:'Order received',preparing:'Being prepared',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
-    const objNextStatuses = {received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
+    const objStatusLabels = {order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Preparing order',cooking_order:'Cooking order',order_ready:'Order ready',received:'Order received',preparing:'Being prepared',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
+    const objNextStatuses = {order_received:['order_confirmed'],order_confirmed:['preparing_order'],preparing_order:['cooking_order'],cooking_order:['order_ready'],order_ready:['completed'],received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
+    let bOrderUpdatesPaused=false;
     let nEditingOrderId = null;
     let arrEditorItems=[];
     const mapEditorPrices=new Map();
@@ -154,10 +156,11 @@
     }
 
     function renderOrder(objOrder,strBucket) {
-      const objCard=document.createElement('article');objCard.className='order-card';
+      const strActiveStatus=objOrder.tracking_status||objOrder.status;
+      const objCard=document.createElement('article');objCard.className='order-card card';objCard.id=`order-${objOrder.id}`;
       const objTop=document.createElement('div');objTop.className='order-top';
       objTop.append(textElement('h3',`LP-${objOrder.id} · ${money(objOrder.total_cents)}`));
-      objTop.append(textElement('span',objStatusLabels[objOrder.status]||objOrder.status,'badge'+(objOrder.needsAttention?' warning':'')));
+      objTop.append(textElement('span',objStatusLabels[strActiveStatus]||strActiveStatus,'badge'+(objOrder.needsAttention?' warning':'')));
       const objMeta=textElement('p',`${objOrder.customer_name} · ${objOrder.customer_email}${objOrder.customer_phone?' · '+objOrder.customer_phone:''}`,'order-meta');
       const objPlaced=textElement('p',`Placed ${formatDate(objOrder.created_at)} · Last updated ${formatDate(objOrder.updated_at)}`,'order-meta');
       const objItems=document.createElement('ul');objItems.className='items';
@@ -166,23 +169,35 @@
       if(objOrder.needsAttention)objCard.append(textElement('p','This order has been active for 45 minutes or more. Check its status with the customer and staff.','demo-note'));
       if(strBucket==='current'){
         const objActions=document.createElement('div');objActions.className='actions';
-        for(const strStatus of objNextStatuses[objOrder.status]||[]){
-          const objButton=textElement('button',strStatus==='completed'?'Mark picked up':`Mark ${objStatusLabels[strStatus].toLowerCase()}`,'btn btn-small'+(strStatus==='ready'?' btn-green':''));
+        for(const strStatus of objNextStatuses[strActiveStatus]||[]){
+          const objButton=textElement('button',strStatus==='completed'?'Mark picked up':`Mark ${objStatusLabels[strStatus].toLowerCase()}`,'btn btn-primary btn-small'+(strStatus==='ready'?' btn-green':''));
           objButton.type='button';objButton.addEventListener('click',()=>changeStatus(objOrder,objButton,strStatus));objActions.append(objButton);
         }
-        if(['received','preparing','ready'].includes(objOrder.status)){
+        if(!objOrder.tracking_status&&['received','preparing','ready'].includes(objOrder.status)){
           const objEdit=textElement('button','Edit items','btn btn-small');objEdit.type='button';objEdit.addEventListener('click',()=>openEditor(objOrder));objActions.append(objEdit);
+        }
+        if(objOrder.tracking_status){
+          const objEstimateForm=document.createElement('form');objEstimateForm.className='row g-2 align-items-end mt-2';
+          const objEstimateLabel=textElement('label',`Estimated pickup for LP-${objOrder.id}`,'form-label');objEstimateLabel.htmlFor=`estimate-${objOrder.id}`;
+          const objEstimate=document.createElement('input');objEstimate.type='datetime-local';objEstimate.id=objEstimateLabel.htmlFor;objEstimate.className='form-control';objEstimate.required=true;
+          if(objOrder.estimated_pickup_time){const dtPickup=new Date(objOrder.estimated_pickup_time);objEstimate.value=new Date(dtPickup.getTime()-dtPickup.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+          const objSave=textElement('button','Save pickup estimate','btn btn-primary');objSave.type='submit';
+          objEstimateForm.append(objEstimateLabel,objEstimate,objSave);
+          objEstimateForm.addEventListener('submit',async objEvent=>{objEvent.preventDefault();objSave.disabled=true;try{await api(`/api/employee/orders/${objOrder.id}/estimate`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({estimatedPickupTime:new Date(objEstimate.value).toISOString()})});announce(`Pickup estimate saved for LP-${objOrder.id}.`);}catch(objError){announce(objError.message,true);}finally{objSave.disabled=false;}});
+          objCard.append(objEstimateForm,textElement('p',`${objOrder.payment_method} · ${objOrder.payment_status}`));
         }
         objCard.append(objActions);
       }
       return objCard;
     }
 
-    async function loadOrders(strBucket) {
+    async function loadOrders(strBucket,bAutomatic=false) {
       const strContainer=strBucket==='past'?'past-orders':'current-orders';
-      const objContainer=$(strContainer);objContainer.replaceChildren();
+      const objContainer=$(strContainer);
       try{
-        const arrOrders=await api(`/api/admin/orders?bucket=${strBucket}`);
+        const arrOrders=await api(!bDemoMode&&strBucket==='current'?'/api/employee/orders/active':`/api/admin/orders?bucket=${strBucket}`);
+        if(bAutomatic&&(objContainer.contains(document.activeElement)||$('edit-dialog').open||bOrderUpdatesPaused))return;
+        objContainer.replaceChildren();
         if(!arrOrders.length)objContainer.append(textElement('p',strBucket==='past'?'No completed or cancelled orders yet.':'No current orders. New orders will appear here.','empty'));
         else for(const objOrder of arrOrders)objContainer.append(renderOrder(objOrder,strBucket));
         announce(`${arrOrders.length} ${strBucket} order${arrOrders.length===1?'':'s'} loaded.`);
@@ -191,7 +206,7 @@
 
     async function changeStatus(objOrder,objButton,strStatus) {
       objButton.disabled=true;
-      try{await api(`/api/admin/orders/${objOrder.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:strStatus})});await Promise.all([loadOrders('current'),loadOrders('past')]);}
+      try{const bComplete=strStatus==='completed';const strPath=objOrder.tracking_status?`/api/employee/orders/${objOrder.id}/${bComplete?'complete':'status'}`:`/api/admin/orders/${objOrder.id}`;await api(strPath,{method:objOrder.tracking_status&&bComplete?'POST':'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:strStatus,expectedStatus:objOrder.tracking_status})});await Promise.all([loadOrders('current'),loadOrders('past')]);($(`order-${objOrder.id}`)?.querySelector('button')||$('tab-current')).focus();}
       catch(error){announce(error.message,true);objButton.disabled=false;}
     }
 
@@ -357,7 +372,14 @@
     const strInitialTab=objPageQuery.get('tab');
     const arrValidTabs=bAnalyticsPage?['ordering','employees','business']:['current','past','customers'];
     const objInitialTab=arrValidTabs.includes(strInitialTab)?$(`tab-${strInitialTab}`):$(`tab-${bAnalyticsPage?'ordering':'current'}`);
+    if(!bDemoMode&&!bAnalyticsPage){
+      const objPause=textElement('button','Pause automatic order updates','btn btn-outline-secondary');objPause.type='button';objPause.setAttribute('aria-pressed','false');
+      objPause.addEventListener('click',()=>{bOrderUpdatesPaused=!bOrderUpdatesPaused;objPause.setAttribute('aria-pressed',String(bOrderUpdatesPaused));objPause.textContent=bOrderUpdatesPaused?'Resume automatic order updates':'Pause automatic order updates';});
+      $('panel-current').prepend(objPause);
+    }
     setTab(objInitialTab);
+    // Avoid replacing focused controls or an unsaved estimate while polling.
+    setInterval(()=>{if(!bOrderUpdatesPaused&&!bDemoMode&&!bAnalyticsPage&&!document.hidden&&!$('panel-current').hidden&&!$('edit-dialog').open&&!$('current-orders').contains(document.activeElement))loadOrders('current',true);},5000);
   </script>
 </body>
 </html>

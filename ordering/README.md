@@ -1,3 +1,13 @@
+# Current lifecycle sprint
+
+See [LIFECYCLE.md](./LIFECYCLE.md) for the current FastAPI lifecycle service,
+Debian diagnostics, dependency installation, one-time migration and configuration.
+Checkout now supports mock online and unpaid pickup orders, receipts, email fallback,
+five-stage public tracking and kitchen pickup estimates. Existing identity and analytics
+integrations are retained. The setup notes below describe the older Stripe implementation;
+follow the lifecycle guide for the new checkout. Do not reapply the old schema after the
+lifecycle migration, because its payment enum predates the new payment methods.
+
 # Luigi’s MariaDB ordering system
 
 The supplied pizza interface is connected to a Node.js API and MariaDB. Customers can check out as guests; sign-in and account creation remain a teammate-owned integration. Staff use `/admin` for current and past orders, order edits, analytics, and customer search. Checkout uses Stripe-hosted online payment. No email is sent automatically.
