@@ -11,10 +11,11 @@ function createHarness(bFail=false) {
  function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},replaceChildren(){this.children=[]}}}
  for(const strId of ['step-1','step-2','step-3','step-4']){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement);}
  const mapWindowListeners=new Map();
- const objStorage=new Map();const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:'',assign(){}},sessionStorage:{setItem(k,v){objStorage.set(k,v)},getItem(k){return objStorage.get(k)||null},removeItem(k){objStorage.delete(k)}},URLSearchParams,crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
+ const objStorage=new Map();const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:'',assign(strUrl){this.href=strUrl}},sessionStorage:{setItem(k,v){objStorage.set(k,v)},getItem(k){return objStorage.get(k)||null},removeItem(k){objStorage.delete(k)}},URLSearchParams,crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
   if(strPath==='/api/menu')return {ok:true,json:async()=>[{category:'pizza',name:'Small',price_cents:1000},{category:'topping',name:'Cheese',price_cents:150},{category:'topping',name:'Pepperoni',price_cents:200}]};
   if(strPath==='/api/payment/config')return {ok:true,json:async()=>({publishableKey:'pk_test_sample'})};
   if(strPath==='/api/session')return {ok:true,json:async()=>({authenticated:false,authReady:false,user:null})};
+  if(strPath==='/api/auth/logout')return {ok:true,json:async()=>({message:'Signed out.'})};
   if(strPath==='/api/orders/mine')return {ok:true,json:async()=>[]};
   arrRequests.push(JSON.parse(objOptions.body));
   if(strPath==='/api/payment/intent')return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{clientSecret:'pi_secret_sample'}};
@@ -25,7 +26,7 @@ function createHarness(bFail=false) {
  return {mapElements,arrRequests,objContext};
 }
 test('admin homepage analytics link opens its separate analytics page',()=>{
- assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?demo=1&tab=ordering"/);
+ assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
 test('customer places pickup order and sees an itemized receipt and tracker',async()=>{
  const objHarness=createHarness();
@@ -75,44 +76,33 @@ test('guest checkout keeps its details step and account requests do not authenti
  objHarness.mapElements.get('start-order').textContent='Continue as Guest →';
  objHarness.mapElements.get('sign-in').handlers.click();
  assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);
- assert.match(objHarness.mapElements.get('auth-message').textContent,/choose an account type/i);
+ assert.equal(objHarness.objContext.location.href,'/account?mode=login');
  objHarness.mapElements.get('start-order').handlers.click();
  assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
  assert.equal(objHarness.mapElements.get('start-order').textContent,'Continue as Guest →');
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),false);
 });
-test('demo role picker exposes Customer and Admin UI without granting server access',()=>{
+test('account access uses the real sign-in page and has no role selector',()=>{const objHarness=createHarness();objHarness.mapElements.get('create-account').handlers.click();assert.equal(objHarness.objContext.location.href,'/account?mode=register');assert.doesNotMatch(strHtml,/id="demo-role"/);assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);});
+test('sign out clears the active role, returns home, and offers sign-in again',async()=>{
  const objHarness=createHarness();
- objHarness.mapElements.get('sign-in').handlers.click();
- assert.equal(objHarness.mapElements.get('demo-sign-in').open,true);
- objHarness.mapElements.get('demo-role').value='customer';
- objHarness.mapElements.get('demo-role-continue').handlers.click({preventDefault(){}});
- assert.equal(vm.runInContext('objAuthState.user.role',objHarness.objContext),'customer');
- assert.equal(vm.runInContext('objAuthState.demo',objHarness.objContext),true);
- assert.equal(objHarness.mapElements.get('orders-button').classList.contains('hidden'),false);
- assert.equal(objHarness.mapElements.get('firstName').value,'Alex');
- assert.doesNotMatch(objHarness.mapElements.get('auth-message').textContent,/demo|server data stays protected/i);
-});
-test('sign out clears the active role, returns home, and offers sign-in again',()=>{
- const objHarness=createHarness();
- vm.runInContext("selectDemoRole('admin')",objHarness.objContext);
+ objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'7',role:'admin',email:'admin@example.com',firstName:'Ada',lastName:'Admin',phone:'5551234567'}});
  assert.equal(objHarness.mapElements.get('sign-out').classList.contains('hidden'),false);
- objHarness.mapElements.get('sign-out').handlers.click();
+ await objHarness.mapElements.get('sign-out').handlers.click();
  assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);
  assert.equal(objHarness.mapElements.get('sign-out').classList.contains('hidden'),true);
  assert.equal(objHarness.mapElements.get('sign-in').classList.contains('hidden'),false);
  assert.equal(objHarness.mapElements.get('home-page').classList.contains('hidden'),false);
- assert.match(objHarness.mapElements.get('auth-message').textContent,/signed out/i);
+ assert.match(objHarness.mapElements.get('auth-message').textContent,/guest/i);
 });
-test('selected role submits mock online payment without collecting card details',async()=>{
+test('signed-in customer submits pickup order without collecting card details',async()=>{
  const objHarness=createHarness();
- vm.runInContext("selectDemoRole('customer')",objHarness.objContext);
- objHarness.mapElements.get('phone').value='5551234567';objHarness.mapElements.get('payment-method').value='online';
+ objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'8',role:'customer',email:'customer@example.com',firstName:'Ada',lastName:'Customer',phone:'5551234567'}});
+ objHarness.mapElements.get('phone').value='5551234567';objHarness.mapElements.get('payment-method').value='in_store';
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
  assert.equal(objHarness.arrRequests.length,1);
- assert.equal(objHarness.arrRequests[0].customer.email,'customer@luigispizza.com');
- assert.equal(objHarness.arrRequests[0].paymentMethod,'online');
+ assert.equal(objHarness.arrRequests[0].customer.email,'customer@example.com');
+ assert.equal(objHarness.arrRequests[0].paymentMethod,'in_store');
  assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
 });
 
@@ -128,7 +118,33 @@ test('signed-in account without phone can enter the required contact details',()
 
 test('admin Orders navigation opens the authenticated live queue',()=>{
  const objHarness=createHarness();
- vm.runInContext("selectDemoRole('admin')",objHarness.objContext);
+ objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'7',role:'admin',email:'admin@example.com',firstName:'Ada',lastName:'Admin',phone:'5551234567'}});
  objHarness.mapElements.get('orders-button').handlers.click();
  assert.equal(objHarness.objContext.location.href,'/admin?tab=current');
+});
+
+const strStripeCode=readFileSync(new URL('../public/stripe-checkout.js',import.meta.url),'utf8');
+test('card checkout redirects to Stripe and retries with the same secret, without posting an unpaid order',async()=>{
+ const objHarness=createHarness(),fnOriginal=objHarness.objContext.fetch,arrStripeRequests=[];objHarness.objContext.URL=URL;
+ objHarness.objContext.fetch=async(strPath,objOptions)=>{if(strPath==='/api/stripe/config')return {ok:true,json:async()=>({enabled:true})};if(strPath==='/api/stripe/checkout'){arrStripeRequests.push(JSON.parse(objOptions.body));return {ok:true,json:async()=>({state:'open',url:'https://checkout.stripe.com/c/pay/cs_test_example'})};}return fnOriginal(strPath,objOptions);};
+ vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));
+ objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});objHarness.mapElements.get('payment-method').value='online';
+ vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.equal(arrStripeRequests.length,2);assert.equal(arrStripeRequests[0].checkoutToken,arrStripeRequests[1].checkoutToken);assert.match(arrStripeRequests[0].checkoutToken,/^[a-f0-9]{64}$/);assert.equal(objHarness.arrRequests.length,0);assert.equal(objHarness.objContext.location.href,'https://checkout.stripe.com/c/pay/cs_test_example');assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);
+});
+test('return-page URL alone cannot produce a paid receipt',async()=>{
+ const objHarness=createHarness(),fnOriginal=objHarness.objContext.fetch;objHarness.objContext.URL=URL;objHarness.objContext.location.search='?checkout=success&session_id=cs_test_forged';
+ objHarness.objContext.fetch=async(strPath,objOptions)=>strPath==='/api/stripe/config'?{ok:true,json:async()=>({enabled:true})}:fnOriginal(strPath,objOptions);
+ vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);assert.match(vm.runInContext('objPaymentMessage.textContent',objHarness.objContext),/no checkout access token/i);
+});
+test('verified return displays the paid receipt, tracker and confirmation without submitting another order',async()=>{
+ const objHarness=createHarness(),fnOriginal=objHarness.objContext.fetch;objHarness.objContext.URL=URL;objHarness.objContext.location.search='?checkout=success&session_id=cs_test_verified';
+ objHarness.objContext.sessionStorage.setItem('luigiStripeCheckout',JSON.stringify({requestKey:'12345678-1234-4123-8123-123456789abc',checkoutToken:'a'.repeat(64)}));
+ objHarness.objContext.fetch=async(strPath,objOptions)=>{
+  if(strPath==='/api/stripe/config')return {ok:true,json:async()=>({enabled:true})};
+  if(strPath==='/api/stripe/status')return {ok:true,json:async()=>({state:'paid',receipt:{orderNumber:'LP-99',customer:{name:'Ada Customer',email:'ada@example.com',phone:'5551234567'},items:[{description:'Small pizza',quantity:1,unit:1000}],subtotalCents:1000,taxCents:0,totalCents:1000,paymentMethod:'online',paymentStatus:'paid',trackerUrl:'/track?token=verified'}})};
+  return fnOriginal(strPath,objOptions);
+ };
+ vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));assert.equal(vm.runInContext('state.step',objHarness.objContext),4);assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-99');assert.equal(objHarness.mapElements.get('receipt-details').textContent,'Stripe · paid');assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=verified');assert.equal(objHarness.objContext.sessionStorage.getItem('luigiStripeCheckout'),null);assert.equal(objHarness.arrRequests.length,0);
 });

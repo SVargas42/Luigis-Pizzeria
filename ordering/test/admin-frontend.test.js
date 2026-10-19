@@ -12,9 +12,9 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
  for(const strTab of ['Current Orders','Past Orders','Ordering Analytics','Employee Data','Business Data','Customers'])assert.ok(strHtml.includes(strTab));
  assert.ok(strHtml.includes('aria-selected="true"'));
  assert.ok(!/synthetic|sample data only|school project/i.test(strHtml));
- assert.ok(strScript.includes("get('demo')==='1'"));
+ assert.ok(strScript.includes('const bDemoMode=false;'));
  assert.ok(strScript.includes('handleDemoAdminRequest'));
- assert.ok(strHtml.includes('href="/admin/analytics?demo=1&tab=ordering"'));
+ assert.ok(strHtml.includes('href="/admin/analytics?tab=ordering"'));
  assert.ok(strHtml.includes('id="edit-items-editor"'));
  assert.ok(!strHtml.includes('id="edit-items"'));
  assert.ok(!strHtml.includes('Accessible comparison values'));

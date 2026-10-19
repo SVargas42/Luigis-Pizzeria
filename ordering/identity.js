@@ -1,5 +1,5 @@
-// Authentication is supplied by the teammate-owned identity provider.
-// Until it is connected, this resolver deliberately treats every request as a guest.
+// server.js installs the database session resolver from accounts.js at startup.
+// Fail closed if a tool imports this module without installing a resolver.
 let fnIdentityResolver = async () => null;
 let bIdentityConfigured = false;
 

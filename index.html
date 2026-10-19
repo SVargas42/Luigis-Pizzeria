@@ -46,17 +46,10 @@
   <header class="topbar">
     <div class="container d-flex align-items-center justify-content-between gap-3 py-3 flex-wrap">
       <a class="brand" href="#home" id="home-link" aria-label="Luigi's Pizza home"><span class="brand-mark">✦</span>Luigi's Pizza</a>
-      <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end"><div class="top-note">Fresh from our oven, straight to your table <span class="ms-2" aria-hidden="true">🍕</span></div><nav class="account-controls" aria-label="Account navigation"><button class="btn btn-outline-secondary" type="button" id="sign-in">Sign in</button><button class="btn btn-outline-secondary" type="button" id="create-account">Create account</button><span class="account-name hidden" id="account-name"></span><button class="btn btn-primary hidden" type="button" id="orders-button">Orders</button><a class="btn btn-outline-secondary hidden" id="admin-analytics-link" href="/admin/analytics?demo=1&tab=ordering">Analytics</a><button class="btn btn-outline-secondary hidden" type="button" id="sign-out">Sign out</button></nav></div>
+      <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end"><div class="top-note">Fresh from our oven, straight to your table <span class="ms-2" aria-hidden="true">🍕</span></div><nav class="account-controls" aria-label="Account navigation"><button class="btn btn-outline-secondary" type="button" id="sign-in">Sign in</button><button class="btn btn-outline-secondary" type="button" id="create-account">Create account</button><span class="account-name hidden" id="account-name"></span><button class="btn btn-primary hidden" type="button" id="orders-button">Orders</button><a class="btn btn-outline-secondary hidden" id="admin-analytics-link" href="/admin/analytics?tab=ordering">Analytics</a><button class="btn btn-outline-secondary hidden" type="button" id="sign-out">Sign out</button><a href="/account?mode=profile" class="btn btn-outline-secondary">Account settings</a></nav></div>
     </div>
   </header>
   <div class="container"><p class="account-message" id="auth-message" role="status" aria-live="polite">Welcome to Luigi’s Pizza. Order as a guest or sign in to your account.</p></div>
-  <dialog id="demo-sign-in" aria-labelledby="demo-sign-in-title" class="demo-sign-in">
-    <form method="dialog" id="demo-role-form"><h2 id="demo-sign-in-title">Sign in</h2>
-      <label class="form-label" for="demo-role">Sign in as</label>
-      <select class="form-select mb-3" id="demo-role"><option value="guest">Guest</option><option value="customer">Customer</option><option value="admin">Admin</option></select>
-      <div class="button-row"><button class="btn btn-outline-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="demo-role-continue" value="continue">Continue</button></div>
-    </form>
-  </dialog>
   <main>
     <section class="home-page" id="home-page">
       <div class="container">
@@ -107,9 +100,9 @@
     </section>
 
     <section class="panel hidden" id="step-3" aria-labelledby="payment-title">
-      <div class="section-label" data-step-label="3">Step 3 of 4</div><h2 class="panel-title" id="payment-title" tabindex="-1"><span class="visually-hidden" data-step-heading="3">Step 3 of 4: </span>Payment</h2><p class="panel-subtitle">Choose mock online payment or pay when you pick up your order.</p>
+      <div class="section-label" data-step-label="3">Step 3 of 4</div><h2 class="panel-title" id="payment-title" tabindex="-1"><span class="visually-hidden" data-step-heading="3">Step 3 of 4: </span>Payment</h2><p class="panel-subtitle">Pay at pickup, or use secure Stripe checkout when available.</p>
       <div class="payment-total"><span>Subtotal (tax calculated when placed)</span><strong id="payment-total">$0.00</strong></div>
-      <form id="payment-form"><div class="mb-3"><label class="form-label" for="payment-method">Payment method</label><select class="form-select" id="payment-method" required aria-describedby="payment-help"><option value="in_store">Pay at Pickup</option><option value="online">Pay Online (mock)</option></select><p class="form-text" id="payment-help">Online payment is a placeholder. No card is charged. Pickup payment is due in store.</p></div><p id="order-error" class="alert-inline" role="alert" aria-live="polite"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Place Order →</button></div></form>
+      <form id="payment-form"><div class="mb-3"><label class="form-label" for="payment-method">Payment method</label><select class="form-select" id="payment-method" required aria-describedby="payment-help"><option value="in_store">Pay at Pickup</option></select><p class="form-text" id="payment-help">For online payment, card details are entered on Stripe. Pickup payment is collected in store.</p></div><p id="order-error" class="alert-inline" role="alert" aria-live="polite"></p><div class="button-row"><button class="btn btn-outline-secondary" type="button" data-go="2">← Back to Menu</button><button class="btn btn-success" id="place-order" type="submit">Place Order →</button></div></form>
     </section>
 
     <section class="panel hidden" id="step-4" aria-labelledby="confirm-title">
@@ -160,36 +153,10 @@
       updateProgress();
     }
 
-    function requestAuthAction(strAction){
-      const objRequest=new CustomEvent('luigi:auth-request',{detail:{action:strAction}});
-      window.dispatchEvent(objRequest);
-      if(strAction==='sign-in'){$('demo-sign-in').showModal();$('demo-role').focus();$('auth-message').textContent='Choose an account type to continue.';}
-      else $('auth-message').textContent='Opening account access…';
-    }
-
-    function selectDemoRole(strRole){
-      $('demo-sign-in').close();
-      if(strRole==='guest'){
-        setAuthState({authenticated:false,authReady:true},true);
-        $('auth-message').textContent='Guest mode selected. You can order without an account.';
-        $('home-title').focus({preventScroll:true});
-        return;
-      }
-      const objDemoUser=strRole==='admin'?{id:'admin-preview',role:'admin',email:'admin@luigispizza.com',firstName:'Luigi',lastName:'Admin'}:{id:'customer-preview',role:'customer',email:'customer@luigispizza.com',firstName:'Alex',lastName:'Morgan'};
-      setAuthState({authenticated:true,authReady:true,user:objDemoUser},true);
-      $('home-title').focus({preventScroll:true});
-    }
-
-    function signOut(){
-      window.dispatchEvent(new CustomEvent('luigi:auth-request',{detail:{action:'sign-out'}}));
-      state.customer={firstName:'',lastName:'',email:'',phone:''};
-      setAuthState({authenticated:false,authReady:true});
-      showHome();
-      $('auth-message').textContent='You are signed out. Continue as a guest or sign in again.';
-    }
-
+    function requestAuthAction(strAction){location.assign('/account?mode='+encodeURIComponent(strAction==='create-account'?'register':'login'));}
+    async function signOut(){try{const objResponse=await fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!objResponse.ok)throw Error('Unable to sign out. Please retry.');state.customer={firstName:'',lastName:'',email:'',phone:''};setAuthState({authenticated:false,authReady:true});showHome();}catch(objError){$('auth-message').textContent=objError.message;}}
     window.addEventListener('luigi:auth-state',objEvent=>setAuthState(objEvent.detail));
-    // This is the browser-side handoff for the teammate's auth module; it does not sign anyone in itself.
+    // Page state is informational; every protected API verifies the server session.
     window.LuigiPizzeriaIntegration={acceptAuthState:setAuthState};
 
     function renderPizzas(){
@@ -267,6 +234,7 @@
         }
         const objItems=document.createElement('ul');
         for(const objItem of objOrder.items||[]){const objItemLine=document.createElement('li');objItemLine.textContent=`${objItem.quantity} × ${objItem.description}`;objItems.append(objItemLine);}
+        if(objOrder.payment_status){const objPayment=document.createElement('p');objPayment.textContent='Payment: '+objOrder.payment_status+(objOrder.refunded_cents?' · Refunded '+money(objOrder.refunded_cents/100):'');objCard.append(objPayment);}
         objCard.append(objHeading,objStatus,objPlaced,objTrack,objItems);objList.append(objCard);
       }
     }
@@ -282,8 +250,6 @@
     $('start-order').addEventListener('click',startOrder);
     $('sign-in').addEventListener('click',()=>requestAuthAction('sign-in'));
     $('sign-out').addEventListener('click',signOut);
-    $('demo-role-continue').addEventListener('click',event=>{event.preventDefault();selectDemoRole($('demo-role').value)});
-    $('demo-sign-in').addEventListener('close',()=>{if(!$('sign-in').classList.contains('hidden'))$('sign-in').focus({preventScroll:true})});
     $('create-account').addEventListener('click',()=>requestAuthAction('create-account'));
     $('orders-button').addEventListener('click',showOrders);
     $('portal-place-order').addEventListener('click',startOrder);
@@ -302,6 +268,7 @@
       requestKey ||= crypto.randomUUID();
       try{
         const objPayload={requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks,paymentMethod:$('payment-method').value};
+        if(objPayload.paymentMethod==='online'){if(typeof beginStripeCheckout!=='function')throw Error('Payment tools are still loading. Please retry.');await beginStripeCheckout(objPayload);return;}
         const objResponse=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(objPayload)});
         const objReceipt=await objResponse.json();if(!objResponse.ok)throw Error(objReceipt.error||'Unable to place order.');
         showPaidOrder(objReceipt,state.customer);requestKey=null;goTo(4);
@@ -311,7 +278,7 @@
     function showPaidOrder(order,customer){
       $('order-number').textContent=order.orderNumber;$('confirm-name').textContent=order.customer?.name||`${customer.firstName} ${customer.lastName}`;$('confirm-email').textContent=order.customer?.email||customer.email;$('receipt-lines').replaceChildren();
       for(const item of order.items){const row=document.createElement('div');row.className='summary-line';const name=document.createElement('span'),value=document.createElement('span');name.textContent=`${item.description} × ${item.quantity}`;value.textContent=money(item.unit*item.quantity/100);row.append(name,value);$('receipt-lines').append(row)}
-      $('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent=order.paymentMethod==='online'?'Pay Online · Mock payment pending (no charge)':'Pay at Pickup · Unpaid';$('receipt-contact').textContent=`${order.customer?.name||customer.firstName+' '+customer.lastName} · ${order.customer?.email||customer.email} · ${order.customer?.phone||customer.phone}`;$('receipt-subtotal').textContent=money(order.subtotalCents/100);$('receipt-tax').textContent=money(order.taxCents/100);$('receipt-tracker').href=order.trackerUrl;$('order-error').textContent='';
+      $('receipt-total').textContent=money(order.totalCents/100);$('receipt-details').textContent=order.paymentMethod==='online'?'Stripe · '+order.paymentStatus:'Pay at Pickup · Unpaid';$('receipt-contact').textContent=`${order.customer?.name||customer.firstName+' '+customer.lastName} · ${order.customer?.email||customer.email} · ${order.customer?.phone||customer.phone}`;$('receipt-subtotal').textContent=money(order.subtotalCents/100);$('receipt-tax').textContent=money(order.taxCents/100);$('receipt-tracker').href=order.trackerUrl;$('order-error').textContent='';
     }
     $('new-order').addEventListener('click',()=>{requestKey=null;state.customer=objAuthState.user?{firstName:objAuthState.user.firstName,lastName:objAuthState.user.lastName,email:objAuthState.user.email,phone:objAuthState.user.phone}:{firstName:'',lastName:'',email:'',phone:''};const objPizza={id:nextPizzaId++,size:null,toppings:[]};state.pizzas=[objPizza];state.activePizzaId=objPizza.id;state.sides=[];state.drinks=[];$('customer-form').reset();if(objAuthState.user){$('firstName').value=state.customer.firstName;$('lastName').value=state.customer.lastName;$('email').value=state.customer.email;$('phone').value=state.customer.phone;}$('payment-form').reset();document.querySelectorAll('.is-invalid').forEach(el=>setInvalid(el,false));$('menu-error').textContent='';renderAll();goTo(canSkipContactDetails()?2:1)});
     $('confirmation-home').addEventListener('click',showHome);
@@ -326,5 +293,6 @@
     renderAll();
 
   </script>
+<script src="/stripe-checkout.js" defer></script>
 </body>
 </html>

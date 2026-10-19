@@ -1,1 +1,1 @@
-{"name":"luigis-ordering","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node --env-file=.env server.js","test":"node --test"},"dependencies":{"mariadb":"^3.4.5"},"engines":{"node":">=22"}}
+{"name":"luigis-ordering","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node --env-file=.env server.js","test":"node --test"},"dependencies":{"mariadb":"^3.4.5","stripe":"23.0.0"},"engines":{"node":">=22"}}

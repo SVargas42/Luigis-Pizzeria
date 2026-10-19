@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?demo=1&tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?demo=1&tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
+  <header><a href="/admin/accounts">Manage accounts</a><a href="/account">Account settings</a><div><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
   <main>
     <p class="message" id="message" role="status" aria-live="polite"></p>
     <div class="tabs" id="orders-tabs" role="tablist" aria-label="Order workspace">
@@ -46,7 +46,7 @@
     <section class="panel" role="tabpanel" id="panel-employees" aria-labelledby="tab-employees" tabindex="0" hidden>
       <div class="toolbar"><div><h2>Employee Data</h2><p>Shift coverage, hours worked, order completion, and average prep times.</p></div></div>
       <div id="employee-summary" class="summary-grid"></div><div class="chart-box"><h3>Shift coverage and order completion</h3><div id="employee-chart"></div></div>
-      <div class="table-scroll mt-3"><table><caption class="sr-only">Employee shift metrics</caption><thead><tr><th scope="col">Team member</th><th scope="col">Role</th><th scope="col">Today’s shift (UTC)</th><th scope="col">Shift state</th><th scope="col">Hours today</th><th scope="col">Orders completed today</th><th scope="col">Orders this week</th><th scope="col">Avg. prep time</th><th scope="col">Details</th></tr></thead><tbody id="employee-rows"></tbody></table></div>
+      <div class="table-scroll mt-3"><table><caption class="sr-only">Employee shift metrics</caption><thead><tr><th scope="col">Team member</th><th scope="col">Role</th><th scope="col">Today’s shift (UTC)</th><th scope="col">Shift state</th><th scope="col">Hours today</th><th scope="col">Orders with staff activity today</th><th scope="col">Orders this week</th><th scope="col">Avg. prep time</th><th scope="col">Details</th></tr></thead><tbody id="employee-rows"></tbody></table></div>
       <section class="box employee-detail" id="employee-detail" aria-live="polite"><div class="toolbar"><h3 id="employee-detail-title">Employee overview</h3><label>Employee<select id="employee-select" aria-label="Choose employee"></select></label></div><div id="employee-detail-summary" class="employee-detail-grid"></div><div id="employee-detail-chart" class="chart" role="img" aria-label="Selected employee weekly completed orders"></div><table class="chart-table"><caption id="employee-chart-caption">Orders completed by day</caption><thead><tr><th scope="col">Day</th><th scope="col">Orders completed</th></tr></thead><tbody id="employee-detail-rows"></tbody></table></section>
     </section>
     <section class="panel" role="tabpanel" id="panel-business" aria-labelledby="tab-business" tabindex="0" hidden>
@@ -64,12 +64,12 @@
     import {createDemoAdminState,handleDemoAdminRequest} from '/admin-demo.js';
     const $ = strId => document.getElementById(strId);
     const money = nCents => '$' + (Number(nCents) / 100).toFixed(2);
-    const bDemoMode=new URLSearchParams(location.search).get('demo')==='1';
+    const bDemoMode=false;
     const bAnalyticsPage=location.pathname==='/admin/analytics';
     const objDemoState=bDemoMode?createDemoAdminState():null;
     const objPageQuery=new URLSearchParams(location.search);
-    $('orders-page-link').href=`/admin${bDemoMode?'?demo=1&tab=current':''}`;
-    $('analytics-page-link').href=`/admin/analytics${bDemoMode?'?demo=1&tab=ordering':''}`;
+    $('orders-page-link').href=`/admin${bDemoMode?'?tab=current':''}`;
+    $('analytics-page-link').href=`/admin/analytics${bDemoMode?'?tab=ordering':''}`;
     $('orders-page-link').setAttribute('aria-current',String(!bAnalyticsPage));
     $('analytics-page-link').setAttribute('aria-current',String(bAnalyticsPage));
     $('staff-title').textContent=bAnalyticsPage?'Luigi’s analytics':'Luigi’s order desk';
@@ -166,6 +166,8 @@
       const objItems=document.createElement('ul');objItems.className='items';
       for(const objItem of objOrder.items||[])objItems.append(textElement('li',`${objItem.quantity} × ${objItem.description} · ${money(objItem.unit_price_cents*objItem.quantity)}`));
       objCard.append(objTop,objMeta,objPlaced,objItems);
+      if(objOrder.payment_status)objCard.append(textElement('p','Payment: '+objOrder.payment_method+' · '+objOrder.payment_status+(objOrder.refunded_cents?' · Refunded '+money(objOrder.refunded_cents):''),'order-meta'));
+      if(['paid','partially_refunded'].includes(objOrder.payment_status)){const objRefundLink=textElement('a','Review or refund in Stripe Dashboard','btn btn-small');objRefundLink.href='https://dashboard.stripe.com/payments';objRefundLink.target='_blank';objRefundLink.rel='noopener noreferrer';objCard.append(objRefundLink,textElement('p','Changing an order status does not issue a refund.','hint'));}
       if(objOrder.needsAttention)objCard.append(textElement('p','This order has been active for 45 minutes or more. Check its status with the customer and staff.','demo-note'));
       if(strBucket==='current'){
         const objActions=document.createElement('div');objActions.className='actions';
@@ -173,7 +175,7 @@
           const objButton=textElement('button',strStatus==='completed'?'Mark picked up':`Mark ${objStatusLabels[strStatus].toLowerCase()}`,'btn btn-primary btn-small'+(strStatus==='ready'?' btn-green':''));
           objButton.type='button';objButton.addEventListener('click',()=>changeStatus(objOrder,objButton,strStatus));objActions.append(objButton);
         }
-        if(!objOrder.tracking_status&&['received','preparing','ready'].includes(objOrder.status)){
+        if(!objOrder.tracking_status&&!['online','card'].includes(objOrder.payment_method)&&['received','preparing','ready'].includes(objOrder.status)){
           const objEdit=textElement('button','Edit items','btn btn-small');objEdit.type='button';objEdit.addEventListener('click',()=>openEditor(objOrder));objActions.append(objEdit);
         }
         if(objOrder.tracking_status){
@@ -297,7 +299,7 @@
 
     async function loadOrderingAnalytics(){
       const arrViews=[['today','ordering-today'],['comparison','ordering-comparison'],['weekdays','ordering-weekdays'],['average','ordering-average'],['monthly','ordering-monthly']];
-      try{await Promise.all(arrViews.map(async([strView,strTargetId])=>renderChart(await api(`/api/admin/analytics?view=${strView}`),strTargetId)));await loadProductComparison();announce('Ordering analytics loaded.');}
+      try{await Promise.all(arrViews.map(async([strView,strTargetId])=>renderChart(await api(`/api/admin/analytics?view=${strView}`),strTargetId)));await loadProductComparison();announce('Recorded order analytics loaded. UTC calendar days; cancelled orders excluded.');}
       catch(error){announce(error.message,true);}
     }
 
@@ -339,10 +341,10 @@
       try{
         const objData=await api('/api/admin/analytics/employees');
         const nHours=objData.employees.reduce((nSum,objPerson)=>nSum+objPerson.hoursToday,0),nOrders=objData.employees.reduce((nSum,objPerson)=>nSum+objPerson.ordersToday,0);
-        renderMetricCards('employee-summary',[['Team members',String(objData.employees.length)],['Hours worked today',`${nHours.toFixed(1)} hrs`],['Orders completed today',String(nOrders)],['Date',objData.asOf]]);
+        renderMetricCards('employee-summary',[['Team members',String(objData.employees.length)],['Shift hours (not tracked)','Not recorded'],['Orders completed today',String(nOrders)],['Date',objData.asOf]]);
         const objRows=$('employee-rows');objRows.replaceChildren();
         const objSelect=$('employee-select');objSelect.replaceChildren();
-        objData.employees.forEach((objPerson,nIndex)=>{const objOption=document.createElement('option');objOption.value=String(nIndex);objOption.textContent=objPerson.name;objSelect.append(objOption);const objRow=document.createElement('tr');for(const strCell of [objPerson.name,objPerson.role,objPerson.shift,objPerson.shiftStatus,`${objPerson.hoursToday} hrs`,String(objPerson.ordersToday),String(objPerson.ordersThisWeek),`${objPerson.averagePrepMinutes} min`])objRow.append(textElement('td',strCell));const objCell=document.createElement('td'),objButton=textElement('button','View details','btn btn-small');objButton.type='button';objButton.addEventListener('click',()=>{objSelect.value=String(nIndex);renderEmployeeDetail(objPerson)});objCell.append(objButton);objRow.append(objCell);objRows.append(objRow);});
+        objData.employees.forEach((objPerson,nIndex)=>{const objOption=document.createElement('option');objOption.value=String(nIndex);objOption.textContent=objPerson.name;objSelect.append(objOption);const objRow=document.createElement('tr');for(const strCell of [objPerson.name,objPerson.role,objPerson.shift,objPerson.shiftStatus,'Not recorded',String(objPerson.ordersToday),String(objPerson.ordersThisWeek),'Not recorded'])objRow.append(textElement('td',strCell));const objCell=document.createElement('td'),objButton=textElement('button','View details','btn btn-small');objButton.type='button';objButton.addEventListener('click',()=>{objSelect.value=String(nIndex);renderEmployeeDetail(objPerson)});objCell.append(objButton);objRow.append(objCell);objRows.append(objRow);});
         const objChart=$('employee-chart');objChart.replaceChildren();
         for(const objPerson of objData.employees){const objRow=document.createElement('div');objRow.className='compare-bar-group';objRow.append(textElement('strong',objPerson.name));const objValue=textElement('span',`${objPerson.ordersToday} orders`,'bar-value');const objTrack=document.createElement('div');objTrack.className='compare-track';const objFill=document.createElement('div');objFill.className='compare-fill';objFill.style.width=`${Math.min(100,objPerson.ordersToday/30*100)}%`;objTrack.append(objFill);objRow.append(objValue,objTrack);objChart.append(objRow);}
         objSelect.onchange=()=>renderEmployeeDetail(objData.employees[Number(objSelect.value)]);
@@ -352,7 +354,7 @@
 
     function renderEmployeeDetail(objPerson){
       if(!objPerson)return;$('employee-detail-title').textContent=objPerson.name;
-      renderMetricCards('employee-detail-summary',[['Role',objPerson.role],['Hours this week',`${objPerson.hoursThisWeek} hrs`],['Orders this week',String(objPerson.ordersThisWeek)],['Avg. prep time',`${objPerson.averagePrepMinutes} min`]]);
+      renderMetricCards('employee-detail-summary',[['Role',objPerson.role],['Hours this week','Not recorded'],['Orders this week',String(objPerson.ordersThisWeek)],['Avg. prep time',`${objPerson.averagePrepMinutes} min`]]);
       const objRows=$('employee-detail-rows');objRows.replaceChildren();const objChart=$('employee-detail-chart');objChart.replaceChildren();const nMaximum=Math.max(1,...objPerson.weeklySeries.map(objPoint=>objPoint.value));
       for(const objPoint of objPerson.weeklySeries){const objRow=document.createElement('tr');objRow.append(textElement('td',objPoint.label),textElement('td',String(objPoint.value)));objRows.append(objRow);const objBarWrap=document.createElement('div');objBarWrap.className='bar-wrap';objBarWrap.append(textElement('span',String(objPoint.value),'bar-value'));const objBar=document.createElement('div');objBar.className='bar';objBar.style.height=`${Math.max(2,objPoint.value/nMaximum*100)}%`;objBarWrap.append(objBar,textElement('span',objPoint.label.slice(5),'bar-label'));objChart.append(objBarWrap);}
     }
@@ -360,7 +362,7 @@
     async function loadBusinessData(){
       try{
         const objData=await api('/api/admin/analytics/business');
-        renderMetricCards('business-summary',[['Estimated sales today',money(objData.salesTodayCents)],['Orders today',String(objData.ordersToday)],['Pizzas today',String(objData.pizzasToday)],['Average ticket',money(objData.averageOrderCents)],['Cancellation rate',`${objData.cancellationRate}%`],['As of',objData.asOf]]);
+        renderMetricCards('business-summary',[['Card value on today’s orders (net refunds)',money(objData.paidCardCents||0)],['Refunds on today’s card orders',money(objData.refundedCardCents||0)],['Non-cancelled order value today',money(objData.salesTodayCents)],['Orders today',String(objData.ordersToday)],['Pizzas today',String(objData.pizzasToday)],['Average ticket',money(objData.averageOrderCents)],['Cancellation rate',`${objData.cancellationRate}%`],['As of',objData.asOf]]);
         const objChart=$('business-chart');objChart.replaceChildren();
         const nMaximum=Math.max(1,...objData.weeklySales.map(objPoint=>objPoint.value));
         const objBars=document.createElement('div');objBars.className='chart';objBars.setAttribute('aria-hidden','true');

@@ -1,164 +1,81 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {timingSafeEqual} from 'node:crypto';
-import {createHmac} from 'node:crypto';
 import mariadb from 'mariadb';
+import Stripe from 'stripe';
+import {createPaymentService} from './payments.js';
 import {normalizeEditableItems,validateOrder} from './validation.js';
-import {buildSyntheticAnalytics,buildSyntheticBusinessData,buildSyntheticEmployeeData,buildSyntheticItemComparison,canTransitionStatus,orderAttention} from './domain.js';
+import {canTransitionStatus,orderAttention} from './domain.js';
 import {identityIsConfigured,resolveIdentity} from './identity.js';
+import {createAccountService,deliverAccountMail} from './accounts.js';
+import {setIdentityResolver} from './identity.js';
+import {loadAnalytics} from './analytics.js';
 import {requiresStaffAuthentication} from './admin-access.js';
 
-for (const key of ['DB_PASSWORD','ADMIN_USER','ADMIN_PASSWORD']) {
+for (const key of ['DB_PASSWORD','SITE_URL']) {
  if (!process.env[key] || /replace-|PUT_YOUR|CHOOSE_A|YOUR_/i.test(process.env[key])) throw new Error(`Set ${key} in .env before starting.`);
 }
-const pool = mariadb.createPool({host:process.env.DB_HOST || '127.0.0.1',port:Number(process.env.DB_PORT || 3306),user:process.env.DB_USER || 'luigis_app',password:process.env.DB_PASSWORD,database:process.env.DB_NAME || 'luigis',connectionLimit:5,bigIntAsNumber:true});
+const pool = mariadb.createPool({host:process.env.DB_HOST || '127.0.0.1',port:Number(process.env.DB_PORT || 3306),user:process.env.DB_USER || 'luigis_app',password:process.env.DB_PASSWORD,database:process.env.DB_NAME || 'luigis',connectionLimit:10,bigIntAsNumber:true,timezone:'Z',initSql:"SET time_zone = '+00:00'"});
+const objAccountConfig={siteUrl:process.env.SITE_URL,mailKey:process.env.RESEND_API_KEY,mailFrom:process.env.ACCOUNT_MAIL_FROM,trustLoopbackProxy:process.env.TRUST_PROXY_LOOPBACK==='1'};
+const objAccounts=createAccountService(pool,objAccountConfig);
+setIdentityResolver(objRequest=>objAccounts.identity(objRequest));
+let bMailWorkerBusy=false;
+const objMailTimer=setInterval(async()=>{if(bMailWorkerBusy)return;bMailWorkerBusy=true;try{await deliverAccountMail(pool,objAccountConfig);}catch(objError){console.error('Account mail worker failed:',objError.code||objError.name);}finally{bMailWorkerBusy=false;}},5000);objMailTimer.unref();
+const bStripeEnabled=process.env.STRIPE_ENABLED==='1';
+const bStripeConfigured=['test','live'].includes(process.env.STRIPE_MODE)&&process.env.STRIPE_SECRET_KEY?.startsWith('sk_'+process.env.STRIPE_MODE+'_')&&process.env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_');
+if(bStripeEnabled&&!bStripeConfigured)throw Error('Configure matching STRIPE_MODE, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.');
+const objStripeConfig={enabled:bStripeEnabled,liveMode:process.env.STRIPE_MODE==='live',webhookSecret:process.env.STRIPE_WEBHOOK_SECRET,siteUrl:process.env.SITE_URL,taxBasisPoints:Number(process.env.TAX_BASIS_POINTS||0)};
+const objStripe=bStripeConfigured?new Stripe(process.env.STRIPE_SECRET_KEY,{maxNetworkRetries:2,timeout:10000}):null;
+const objPayments=createPaymentService(pool,objStripe,objStripeConfig);
 const allowedTransitions = {received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
 function send(res,status,data) { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); res.end(JSON.stringify(data)); }
-function authorized(req) {
- const supplied = Buffer.from(req.headers.authorization || '');
- const expected = Buffer.from('Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64'));
- return supplied.length === expected.length && timingSafeEqual(supplied,expected);
-}
+
 async function isAdminRequest(req) {
  const objIdentity=await resolveIdentity(req);
- return objIdentity?.role==='admin' || authorized(req);
+ return objIdentity?.role==='admin';
 }
 async function body(req) {
- if (!(req.headers['content-type'] || '').startsWith('application/json')) throw new Error('JSON required');
- let raw='';
- for await (const chunk of req) {raw += chunk; if (Buffer.byteLength(raw)>32768) throw new Error('Request too large');}
- return JSON.parse(raw);
+ if (!(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) throw new Error('JSON required');
+ return JSON.parse(await rawBody(req,32768));
 }
-async function rawBody(req) {
- let strRaw='';for await(const chunk of req){strRaw+=chunk;if(Buffer.byteLength(strRaw)>65536)throw new Error('Request too large');}return strRaw;
-}
-async function createOrder(payload,objIdentity=null,stripePaymentIntentId=null,stripeSessionId=null) {
- const conn = await pool.getConnection();
- try {
-  await conn.beginTransaction();
-  const rows = await conn.query('SELECT category,name,price_cents FROM menu_prices');
-  if(objIdentity) payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
-  const data = validateOrder(payload,new Map(rows.map(r=>[`${r.category}:${r.name}`,r.price_cents])));
-  // Claim the retry key before changing any customer data. Duplicate inserts wait
-  // for the original transaction and then return its committed receipt.
-  await conn.query('INSERT INTO customers(first_name,last_name,email,phone) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[data.customer.firstName,data.customer.lastName,data.customer.email,data.customer.phone]);
-  const [customer] = await conn.query('SELECT id FROM customers WHERE email=?',[data.customer.email]);
-  const result = await conn.query('INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents,payment_method,stripe_session_id,stripe_payment_intent_id) VALUES(?,?,?,?,?,?,?,?,?)',[payload.requestKey,customer.id,`${data.customer.firstName} ${data.customer.lastName}`,data.customer.email,data.customer.phone,data.total,'card',stripeSessionId,stripePaymentIntentId]);
-  await conn.query('UPDATE customers SET first_name=?,last_name=?,phone=? WHERE id=?',[data.customer.firstName,data.customer.lastName,data.customer.phone,customer.id]);
-  for (const item of data.items) await conn.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[result.insertId,item.kind,item.description,item.quantity,item.unit]);
-  await conn.query("INSERT INTO order_events(order_id,actor_email,event_type,to_status,details) VALUES(?,?,'created','received','Order placed')",[result.insertId,objIdentity?.email || data.customer.email]);
-  await conn.commit();
-  return {orderNumber:`LP-${result.insertId}`,orderId:result.insertId,totalCents:data.total,items:data.items};
- } catch (error) {
-  await conn.rollback();
-  if (error.code === 'ER_DUP_ENTRY') {
-   const [order] = await conn.query('SELECT id,total_cents FROM orders WHERE request_key=?',[payload.requestKey]);
-   if (order) {
-    const items = await conn.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[order.id]);
-    return {orderNumber:`LP-${order.id}`,orderId:order.id,totalCents:order.total_cents,items};
-   }
-  }
-  throw error;
- } finally {conn.release();}
-}
-async function stripeRequest(path,params=null,method='POST') {
- const headers={Authorization:`Bearer ${process.env.STRIPE_SECRET_KEY}`};
- const response=await fetch(`https://api.stripe.com/v1/${path}`,{method,headers,...(params?{body:params.toString(),headers:{...headers,'Content-Type':'application/x-www-form-urlencoded'}}:{})});
- const data=await response.json();
- if(!response.ok) throw new Error('Payment provider request failed');
- return data;
-}
-async function finishPaidCheckout(session) {
- if(session.payment_status!=='paid'||session.currency!=='usd'||!session.metadata?.request_key) throw new Error('Payment is not complete.');
- const [existing]=await pool.query('SELECT id,total_cents FROM orders WHERE stripe_session_id=?',[session.id]);
- if(existing){const items=await pool.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[existing.id]);return {orderNumber:`LP-${existing.id}`,orderId:existing.id,totalCents:existing.total_cents,items};}
- const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_session_id=?',[session.metadata.request_key,session.id]);
- if(!pending||Number(session.amount_total)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
- const receipt=await createOrder(JSON.parse(pending.payload_json),null,null,session.id);
- await pool.query('DELETE FROM pending_checkouts WHERE request_key=?',[session.metadata.request_key]);
- return receipt;
-}
-async function finishPaidPaymentIntent(intent) {
- if(intent.status!=='succeeded'||intent.currency!=='usd'||!intent.metadata?.request_key) throw new Error('Payment is not complete.');
- const [existing]=await pool.query('SELECT id,total_cents FROM orders WHERE stripe_payment_intent_id=?',[intent.id]);
- if(existing){const items=await pool.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[existing.id]);return {orderNumber:`LP-${existing.id}`,orderId:existing.id,totalCents:existing.total_cents,items};}
- const [pending]=await pool.query('SELECT payload_json,total_cents FROM pending_checkouts WHERE request_key=? AND stripe_payment_intent_id=?',[intent.metadata.request_key,intent.id]);
- if(!pending||Number(intent.amount_received)!==Number(pending.total_cents)) throw new Error('Payment could not be verified.');
- const receipt=await createOrder(JSON.parse(pending.payload_json),null,intent.id);
- await pool.query('DELETE FROM pending_checkouts WHERE request_key=?',[intent.metadata.request_key]);
- return receipt;
+async function rawBody(req,nLimit=65536,bBuffer=false) {
+ const arrChunks=[];let nBytes=0;
+ for await(const bufChunk of req){nBytes+=bufChunk.length;if(nBytes>nLimit)throw new Error('Request too large');arrChunks.push(bufChunk);}
+ return bBuffer?Buffer.concat(arrChunks):Buffer.concat(arrChunks).toString('utf8');
 }
 const server = http.createServer(async(req,res)=>{
  res.setHeader('X-Content-Type-Options','nosniff');
  res.setHeader('Referrer-Policy','no-referrer');
  res.setHeader('X-Frame-Options','DENY');
- const url = new URL(req.url,'http://localhost');
+ let url;try{url=new URL(req.url,'http://localhost');}catch{return send(res,400,{error:'Invalid URL'});}
  try {
-  if (requiresStaffAuthentication(url)) {
-   if (!await isAdminRequest(req)) {res.setHeader('WWW-Authenticate','Basic realm="Luigi staff", charset="UTF-8"'); return send(res,401,{error:'Staff login required'});}
+  if(['POST','PATCH','PUT','DELETE'].includes(req.method)&&url.pathname!=='/api/stripe/webhook'){
+   if(req.headers.origin!==new URL(process.env.SITE_URL).origin)return send(res,403,{error:'Invalid request origin'});
   }
+  if(req.method==='POST'&&(url.pathname.startsWith('/api/auth/')||['/api/admin/accounts/invite','/api/admin/accounts/update'].includes(url.pathname))){
+   let objInput;try{objInput=await body(req);if(!objInput||Array.isArray(objInput)||typeof objInput!=='object')throw Error();}catch{return send(res,400,{error:'Send a JSON object (maximum 32 KB).'});}
+   try{const objResult=await objAccounts.handle(req,url.pathname,objInput);if(objResult.cookie)res.setHeader('Set-Cookie',objResult.cookie);return send(res,objResult.status,objResult.data);}catch(objError){return send(res,objError.status||(objError.code==='ER_DUP_ENTRY'?409:503),{error:objError.status?objError.message:objError.code==='ER_DUP_ENTRY'?'This account already exists.':'Account service is temporarily unavailable.'});}
+  }
+  if (requiresStaffAuthentication(url)) {
+   if (!await isAdminRequest(req)) {if(!url.pathname.startsWith('/api/')){res.writeHead(303,{Location:'/account?mode=login&next='+encodeURIComponent(url.pathname)});return res.end();}return send(res,403,{error:'Administrator account required.'});}
+  }
+  if(req.method==='GET'&&url.pathname==='/api/admin/accounts')return send(res,200,await objAccounts.listAccounts());
   if (req.method==='GET' && url.pathname==='/api/session') {
    const objIdentity=await resolveIdentity(req);
    return send(res,200,{authenticated:Boolean(objIdentity),authReady:identityIsConfigured(),user:objIdentity});
   }
   if(req.method==='POST'&&url.pathname==='/api/stripe/webhook'){
-   if(!process.env.STRIPE_WEBHOOK_SECRET)return send(res,503,{error:'Webhook is not configured.'});
-   let strRaw;try{strRaw=await rawBody(req);}catch{return send(res,413,{error:'Webhook request is too large.'});}
-   const arrSignature=(req.headers['stripe-signature']||'').split(',').map(strPart=>strPart.split('='));const strTimestamp=arrSignature.find(([strKey])=>strKey==='t')?.[1];const arrV1=arrSignature.filter(([strKey])=>strKey==='v1').map(([,strValue])=>strValue);
-   const nTimestamp=Number(strTimestamp);if(!Number.isFinite(nTimestamp)||Math.abs(Date.now()/1000-nTimestamp)>300)return send(res,400,{error:'Invalid webhook signature.'});
-   const strExpected=createHmac('sha256',process.env.STRIPE_WEBHOOK_SECRET).update(`${strTimestamp}.${strRaw}`).digest('hex');const bSignatureValid=arrV1.some(strValue=>{try{const supplied=Buffer.from(strValue,'hex'),expected=Buffer.from(strExpected,'hex');return supplied.length===expected.length&&timingSafeEqual(supplied,expected);}catch{return false;}});
-   if(!bSignatureValid)return send(res,400,{error:'Invalid webhook signature.'});
-   let event;try{event=JSON.parse(strRaw);}catch{return send(res,400,{error:'Invalid webhook payload.'});}
-   if(event.type==='checkout.session.completed'&&event.data?.object?.payment_status==='paid'){try{await finishPaidCheckout(event.data.object);}catch{return send(res,500,{error:'Paid order is awaiting processing.'});}}
-   if(event.type==='payment_intent.succeeded'){try{await finishPaidPaymentIntent(event.data.object);}catch{return send(res,500,{error:'Paid order is awaiting processing.'});}}
-   return send(res,200,{received:true});
+   try{return send(res,200,await objPayments.webhook(await rawBody(req,262144,true),req.headers['stripe-signature']));}catch(objError){console.error('Stripe webhook failed:',objError.code||objError.status||objError.name);return send(res,objError.status||503,{error:objError.status===400?'Invalid webhook signature or environment.':'Payment processing will be retried.'});}
   }
-  if(req.method==='GET'&&url.pathname==='/api/payment/config'){
-   if(!process.env.STRIPE_PUBLISHABLE_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
-   return send(res,200,{publishableKey:process.env.STRIPE_PUBLISHABLE_KEY});
+  if(req.method==='GET'&&url.pathname==='/api/stripe/config')return send(res,200,{enabled:bStripeEnabled});
+  if(req.method==='POST'&&['/api/stripe/checkout','/api/stripe/status'].includes(url.pathname)){
+   let objInput;try{objInput=await body(req);if(!objInput||typeof objInput!=='object'||Array.isArray(objInput))throw Error();}catch{return send(res,400,{error:'Invalid checkout request.'});}
+   try{
+    const objIdentity=await resolveIdentity(req);
+    if(url.pathname.endsWith('/checkout')){if(!bStripeEnabled)return send(res,503,{error:'Online checkout is unavailable. Please choose payment at pickup.'});await objAccounts.limitCheckout(req,objIdentity?.email||objInput.customer?.email||'');await objAccounts.claimOrder(objInput.requestKey,objIdentity);return send(res,200,await objPayments.createCheckout(objInput,objIdentity));}
+    return send(res,200,await objPayments.checkoutStatus(objInput,objIdentity));
+   }catch(objError){console.error('Stripe request failed:',objError.code||objError.status||objError.name);return send(res,objError.status||503,{error:objError.status?objError.message:'Payment service unavailable. Retry this checkout; do not submit a second payment.'});}
   }
-  if(req.method==='POST'&&url.pathname==='/api/payment/intent'){
-   if(!process.env.STRIPE_SECRET_KEY||!process.env.STRIPE_PUBLISHABLE_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
-   let payload;try{payload=await body(req);}catch{return send(res,400,{error:'Invalid checkout request.'});}
-   const objIdentity=await resolveIdentity(req);if(objIdentity)payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
-   const arrMenu=await pool.query('SELECT category,name,price_cents FROM menu_prices');
-   let data;try{data=validateOrder(payload,new Map(arrMenu.map(r=>[`${r.category}:${r.name}`,r.price_cents])));}catch(error){return send(res,400,{error:error.message});}
-   const conn=await pool.getConnection();try{await conn.query('INSERT INTO pending_checkouts(request_key,payload_json,total_cents) VALUES(?,?,?) ON DUPLICATE KEY UPDATE payload_json=VALUES(payload_json),total_cents=VALUES(total_cents)',[payload.requestKey,JSON.stringify(payload),data.total]);}finally{conn.release();}
-   const [pending]=await pool.query('SELECT stripe_payment_intent_id FROM pending_checkouts WHERE request_key=?',[payload.requestKey]);
-   if(pending?.stripe_payment_intent_id){
-    let existing;try{existing=await stripeRequest(`payment_intents/${encodeURIComponent(pending.stripe_payment_intent_id)}`,null,'GET');}catch{}
-    if(existing&&['requires_payment_method','requires_confirmation','requires_action'].includes(existing.status)){
-     if(existing.amount===data.total)return send(res,200,{clientSecret:existing.client_secret});
-     try{await stripeRequest(`payment_intents/${encodeURIComponent(existing.id)}/cancel`,new URLSearchParams(),'POST');}catch{return send(res,409,{error:'Your previous payment is still processing. Please wait a moment and try again.'});}
-    }
-   }
-   const params=new URLSearchParams({amount:String(data.total),currency:'usd','receipt_email':data.customer.email,'metadata[request_key]':payload.requestKey,'automatic_payment_methods[enabled]':'true'});
-   try{const intent=await stripeRequest('payment_intents',params);await pool.query('UPDATE pending_checkouts SET stripe_payment_intent_id=? WHERE request_key=?',[intent.id,payload.requestKey]);return send(res,200,{clientSecret:intent.client_secret});}catch{return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});}
-  }
-  if(req.method==='POST'&&url.pathname==='/api/payment/confirm'){
-   if(!process.env.STRIPE_SECRET_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable.'});
-   let bodyData;try{bodyData=await body(req);}catch{return send(res,400,{error:'Invalid payment confirmation.'});}
-   if(!/^pi_[A-Za-z0-9]+$/.test(bodyData.paymentIntentId||''))return send(res,400,{error:'Invalid payment confirmation.'});
-   try{return send(res,200,await finishPaidPaymentIntent(await stripeRequest(`payment_intents/${encodeURIComponent(bodyData.paymentIntentId)}`,null,'GET')));}catch{return send(res,402,{error:'Payment could not be verified. Please try again.'});}
-  }
-  if(req.method==='POST'&&url.pathname==='/api/checkout/session'){
-   if(!process.env.STRIPE_SECRET_KEY||!process.env.SITE_URL)return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});
-   let payload;try{payload=await body(req);}catch{return send(res,400,{error:'Invalid checkout request.'});}
-   const objIdentity=await resolveIdentity(req);if(objIdentity)payload={...payload,customer:{firstName:objIdentity.firstName,lastName:objIdentity.lastName,email:objIdentity.email,phone:objIdentity.phone}};
-   const arrMenu=await pool.query('SELECT category,name,price_cents FROM menu_prices');
-   let data;try{data=validateOrder(payload,new Map(arrMenu.map(r=>[`${r.category}:${r.name}`,r.price_cents])));}catch(error){return send(res,400,{error:error.message});}
-   const conn=await pool.getConnection();try{await conn.query('INSERT INTO pending_checkouts(request_key,payload_json,total_cents) VALUES(?,?,?) ON DUPLICATE KEY UPDATE request_key=request_key',[payload.requestKey,JSON.stringify(payload),data.total]);}finally{conn.release();}
-   const [pending]=await pool.query('SELECT stripe_session_id FROM pending_checkouts WHERE request_key=?',[payload.requestKey]);
-   if(pending?.stripe_session_id){try{const existing=await stripeRequest(`checkout/sessions/${encodeURIComponent(pending.stripe_session_id)}`,null,'GET');if(existing.status==='open')return send(res,200,{url:existing.url});}catch{}}
-   const params=new URLSearchParams({mode:'payment',success_url:`${process.env.SITE_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${process.env.SITE_URL}/?checkout=cancelled`,customer_email:data.customer.email,client_reference_id:payload.requestKey,'metadata[request_key]':payload.requestKey});
-   data.items.forEach((item,index)=>{params.set(`line_items[${index}][price_data][currency]`,'usd');params.set(`line_items[${index}][price_data][unit_amount]`,String(item.unit));params.set(`line_items[${index}][price_data][product_data][name]`,item.description);params.set(`line_items[${index}][quantity]`,String(item.quantity));});
-   try{const session=await stripeRequest('checkout/sessions',params);await pool.query('UPDATE pending_checkouts SET stripe_session_id=? WHERE request_key=?',[session.id,payload.requestKey]);return send(res,200,{url:session.url});}catch{return send(res,503,{error:'Online checkout is temporarily unavailable. Please try again later.'});}
-  }
-  if(req.method==='GET'&&url.pathname==='/api/checkout/verify'){
-   if(!process.env.STRIPE_SECRET_KEY)return send(res,503,{error:'Online checkout is temporarily unavailable.'});
-   const sessionId=url.searchParams.get('session_id')||'';if(!/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId))return send(res,400,{error:'Invalid checkout session.'});
-   try{const session=await stripeRequest(`checkout/sessions/${encodeURIComponent(sessionId)}`,null,'GET');return send(res,200,await finishPaidCheckout(session));}catch{return send(res,402,{error:'Payment is not complete. Please finish checkout.'});}
-  }
+  if(url.pathname.startsWith('/api/payment/')||url.pathname.startsWith('/api/checkout/'))return send(res,410,{error:'Use the Stripe-hosted checkout endpoint.'});
   if (req.method==='GET' && url.pathname==='/api/menu') {
    const rows = await pool.query('SELECT category,name,price_cents FROM menu_prices');
    return send(res,200,rows);
@@ -173,20 +90,33 @@ const server = http.createServer(async(req,res)=>{
   const bLifecycleRoute=(req.method==='POST'&&url.pathname==='/api/orders') || /^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
   if(bLifecycleRoute){
    if(url.pathname.startsWith('/api/employee/')&&!await isAdminRequest(req)){
-    res.setHeader('WWW-Authenticate','Basic realm="Luigi staff"');return send(res,401,{error:'Staff credentials required'});
+    return send(res,403,{error:'Administrator account required'});
    }
-   const strPayload=['POST','PATCH'].includes(req.method)?JSON.stringify(await body(req)):undefined;
+   let objSubmit=['POST','PATCH'].includes(req.method)?await body(req):undefined;
+   const objActor=await resolveIdentity(req);
+   if(req.method==='POST'&&url.pathname==='/api/orders'){
+    if(objSubmit.paymentMethod!=='in_store')return send(res,400,{error:'Use Stripe checkout for online payments.'});
+    try{await objPayments.reserveCheckoutKey(objSubmit.requestKey,'pickup',objActor);}catch(objError){return send(res,objError.status||503,{error:objError.status?objError.message:'Checkout reservation unavailable.'});}
+    if(objActor)objSubmit.customer={firstName:objActor.firstName,lastName:objActor.lastName,email:objActor.email,phone:objActor.phone};
+    try{await objAccounts.claimOrder(objSubmit.requestKey,objActor);}catch(objError){return send(res,objError.status||503,{error:objError.status?objError.message:'Order ownership check failed.'});}
+   }
+   const strPayload=objSubmit?JSON.stringify(objSubmit):undefined;
    // Only the local lifecycle service receives staff credentials; never forward a client-controlled host.
    const objResponse=await fetch(new URL(url.pathname,process.env.LIFECYCLE_URL||'http://127.0.0.1:8000'),{
-    method:req.method,headers:{'Content-Type':'application/json',...(url.pathname.startsWith('/api/employee/')?{Authorization:'Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64')}:{})},
+    method:req.method,headers:{'Content-Type':'application/json',...(url.pathname.startsWith('/api/employee/')?{'X-Luigi-Actor':objActor.email,Authorization:'Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64')}:{})},
     body:strPayload,signal:AbortSignal.timeout(12000)
    });
-   return send(res,objResponse.status,await objResponse.json());
+   const objResult=await objResponse.json();
+   if(url.pathname==='/api/employee/orders/active'&&objResponse.ok&&Array.isArray(objResult)){
+    const arrPaymentRows=await pool.query("SELECT id,payment_status,refunded_cents FROM orders WHERE status NOT IN ('completed','cancelled')");
+    const mapPayments=new Map(arrPaymentRows.map(objRow=>[String(objRow.id),objRow]));for(const objOrder of objResult){const objPayment=mapPayments.get(String(objOrder.id));if(objPayment){objOrder.payment_status=objPayment.payment_status;objOrder.refunded_cents=objPayment.refunded_cents;}}
+   }
+   return send(res,objResponse.status,objResult);
   }
   if (req.method==='GET' && url.pathname==='/api/orders/mine') {
    const objIdentity=await resolveIdentity(req);
    if(!objIdentity) return send(res,401,{error:'Sign in to view your orders.'});
-   const arrOrders=await pool.query('SELECT id,customer_name,customer_email,status,total_cents,created_at,updated_at FROM orders WHERE customer_email=? ORDER BY id DESC LIMIT 100',[objIdentity.email]);
+   const arrOrders=await pool.query('SELECT o.id,o.customer_name,o.customer_email,o.status,o.total_cents,o.created_at,o.updated_at,o.tracking_status,o.estimated_pickup_time,o.payment_method,o.payment_status,o.refunded_cents FROM orders o JOIN account_order_claims a ON a.request_key=o.request_key WHERE a.account_id=? ORDER BY o.id DESC LIMIT 100',[objIdentity.id]);
    for(const objOrder of arrOrders){
     objOrder.items=await pool.query('SELECT kind,description,quantity,unit_price_cents FROM order_items WHERE order_id=? ORDER BY id',[objOrder.id]);
     objOrder.events=await pool.query("SELECT event_type,from_status,to_status,details,created_at FROM order_events WHERE order_id=? AND event_type IN ('created','status_changed') ORDER BY id",[objOrder.id]);
@@ -196,7 +126,7 @@ const server = http.createServer(async(req,res)=>{
   if (req.method==='GET' && url.pathname==='/api/admin/orders') {
    const strBucket=url.searchParams.get('bucket')==='past'?'past':'current';
    const strBucketWhere=strBucket==='past'?"status IN ('completed','cancelled')":"status IN ('received','preparing','ready')";
-   const arrVisible = await pool.query(`SELECT id,customer_name,customer_email,customer_phone,status,total_cents,created_at,updated_at FROM orders WHERE ${strBucketWhere} ORDER BY id DESC LIMIT 500`);
+   const arrVisible = await pool.query(`SELECT id,customer_name,customer_email,customer_phone,status,total_cents,created_at,updated_at,payment_method,payment_status,refunded_cents,stripe_payment_intent_id FROM orders WHERE ${strBucketWhere} ORDER BY id DESC LIMIT 500`);
    for (const objOrder of arrVisible) {
     objOrder.items = await pool.query('SELECT kind,description,quantity,unit_price_cents FROM order_items WHERE order_id=? ORDER BY id',[objOrder.id]);
     objOrder.needsAttention=orderAttention(objOrder);
@@ -204,16 +134,16 @@ const server = http.createServer(async(req,res)=>{
    return send(res,200,arrVisible);
   }
   if (req.method==='GET' && url.pathname==='/api/admin/analytics') {
-   try {return send(res,200,buildSyntheticAnalytics(url.searchParams.get('view') || 'today'));}
+   try {return send(res,200,(await loadAnalytics(pool)).ordering(url.searchParams.get('view') || 'today'));}
    catch {return send(res,400,{error:'Choose a supported analytics view.'});}
   }
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/products') {
-   try {return send(res,200,buildSyntheticItemComparison(url.searchParams.get('left')||'pizza:Small',url.searchParams.get('right')||'drink:Dr Pepper (Medium)',url.searchParams.get('period')||'week'));}
+   try {return send(res,200,(await loadAnalytics(pool)).products(url.searchParams.get('left')||'pizza:Small',url.searchParams.get('right')||'drink:Dr Pepper (Medium)',url.searchParams.get('period')||'week'));}
    catch {return send(res,400,{error:'Choose valid products and a supported period.'});}
   }
-  if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,buildSyntheticEmployeeData());
-  if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,buildSyntheticBusinessData());
-  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js'};
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,(await loadAnalytics(pool)).employees);
+  if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,(await loadAnalytics(pool)).business);
+  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js','/account.js':'./public/account.js','/stripe-checkout.js':'./public/stripe-checkout.js'};
   if (req.method==='GET' && mapBrowserModules[url.pathname]) {
    const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));
    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(strSource);
@@ -249,9 +179,9 @@ const server = http.createServer(async(req,res)=>{
    const conn=await pool.getConnection();
    try{
     await conn.beginTransaction();
-    const [objOrder]=await conn.query('SELECT status,tracking_status FROM orders WHERE id=? FOR UPDATE',[editMatch[1]]);
+    const [objOrder]=await conn.query('SELECT status,tracking_status,payment_method FROM orders WHERE id=? FOR UPDATE',[editMatch[1]]);
     if(!objOrder){await conn.rollback();return send(res,404,{error:'Order not found.'});}
-    if(objOrder.tracking_status){await conn.rollback();return send(res,409,{error:'Lifecycle receipts cannot be edited.'});}
+    if(objOrder.tracking_status||['online','card'].includes(objOrder.payment_method)){await conn.rollback();return send(res,409,{error:'Paid or lifecycle receipts cannot be edited. Refund and create a new order if needed.'});}
     if(!['received','preparing','ready'].includes(objOrder.status)){await conn.rollback();return send(res,409,{error:'Only active orders can be edited.'});}
     const arrMenu=await conn.query('SELECT category,name,price_cents FROM menu_prices');
     let arrItems;
@@ -267,7 +197,7 @@ const server = http.createServer(async(req,res)=>{
     return send(res,200,{items:arrItems,totalCents:nTotal});
    }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
-  const pages={'/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
+  const pages={'/account':'account.html','/admin/accounts':'account.html','/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
   if (req.method==='GET' && pages[url.pathname]) {
    const html=await readFile(new URL(url.pathname==='/'?'../index.html':`./public/${pages[url.pathname]}`,import.meta.url));
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(html);

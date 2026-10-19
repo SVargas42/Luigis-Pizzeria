@@ -1,0 +1,43 @@
+const $=strId=>document.getElementById(strId);
+const objQuery=new URLSearchParams(location.search),objFragment=new URLSearchParams(location.hash.slice(1));
+const strToken=objFragment.get('token')||'';
+const strMode=objFragment.get('action')||objQuery.get('mode')||'login';
+if(location.hash)history.replaceState(null,'',location.pathname+location.search);
+let strSelectedId=null;
+function announce(strText){$('message').textContent=strText;}
+async function api(strPath,objBody){const objResponse=await fetch(strPath,objBody===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(objBody)});const objData=await objResponse.json();if(!objResponse.ok)throw Error(objData.error||'Request failed. Please retry.');return objData;}
+function textCell(strValue){const objCell=document.createElement('td');objCell.textContent=String(strValue);return objCell;}
+async function loadAccounts(){try{const arrAccounts=await api('/api/admin/accounts');$('accounts').replaceChildren();for(const objAccount of arrAccounts){const objRow=document.createElement('tr');objRow.append(textCell(`${objAccount.first_name} ${objAccount.last_name}`),textCell(`${objAccount.email} / ${objAccount.phone}`),textCell(objAccount.role),textCell(objAccount.disabled_at?'Disabled':objAccount.email_verified_at?'Verified':'Awaiting verification'));const objCell=document.createElement('td'),objButton=document.createElement('button');objButton.type='button';objButton.textContent='Edit '+objAccount.email;objButton.onclick=()=>{strSelectedId=String(objAccount.id);$('selected-account').textContent=objAccount.email;$('update-role').value=objAccount.role;$('update-disabled').value=String(Boolean(objAccount.disabled_at));$('update-form').hidden=false;$('update-role').focus();};objCell.append(objButton);objRow.append(objCell);$('accounts').append(objRow);}}catch(objError){announce(objError.message);}}
+async function init(){
+ try{
+  const objSession=await api('/api/session');
+  if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';}
+  if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('management').hidden=false;$('title').textContent='Manage accounts';await loadAccounts();return;}
+  if(strMode==='verify'){$('title').textContent='Verify email';announce((await api('/api/auth/verify',{token:strToken})).message);return;}
+  if(!['login','register','forgot','resend','reset','invite','profile','password'].includes(strMode))throw Error('Choose a valid account action.');
+  if(['profile','password'].includes(strMode)&&!objSession.authenticated)throw Error('Sign in to update your account.');
+  const objTitles={login:'Sign in',register:'Create account',forgot:'Reset password',resend:'Resend verification',reset:'Choose a new password',invite:'Accept staff invitation',profile:'Your profile',password:'Change password'};
+  $('title').textContent=objTitles[strMode];$('account-form').hidden=false;$('submit').textContent=objTitles[strMode];
+  const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
+  $('profile-fields').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
+  $('email-field').hidden=!bEmail;$('email').required=bEmail;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
+  $('current-field').hidden=strMode!=='password';$('currentPassword').required=strMode==='password';
+  $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Email changes require restaurant support.':'Use the email address associated with your account.';
+  if(strMode==='profile')for(const strId of ['firstName','lastName','phone'])$(strId).value=objSession.user[strId];
+ }catch(objError){announce(objError.message);}
+}
+$('account-form').onsubmit=async objEvent=>{
+ objEvent.preventDefault();$('submit').disabled=true;
+ try{
+  const objInput={email:$('email').value,firstName:$('firstName').value,lastName:$('lastName').value,phone:$('phone').value,password:$('password').value,currentPassword:$('currentPassword').value,token:strToken};
+  const strEndpoint={register:'register',login:'login',forgot:'forgot',resend:'resend',reset:'reset',invite:'accept-invite',profile:'profile',password:'password'}[strMode];
+  const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
+  if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:'/');}
+  else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
+ }catch(objError){announce(objError.message);}finally{$('submit').disabled=false;}
+};
+$('logout').onclick=async()=>{try{await api('/api/auth/logout',{});location.assign('/');}catch(objError){announce(objError.message);}};
+$('refresh').onclick=loadAccounts;
+$('invite-form').onsubmit=async objEvent=>{objEvent.preventDefault();const objButton=$('invite-form').querySelector('button');objButton.disabled=true;try{const objResult=await api('/api/admin/accounts/invite',{firstName:$('invite-first').value,lastName:$('invite-last').value,email:$('invite-email').value,phone:$('invite-phone').value,role:$('invite-role').value,currentPassword:$('invite-password').value});$('invite-form').reset();announce(objResult.message);await loadAccounts();}catch(objError){announce(objError.message);}finally{$('invite-password').value='';objButton.disabled=false;}};
+$('update-form').onsubmit=async objEvent=>{objEvent.preventDefault();const objButton=$('update-form').querySelector('button');objButton.disabled=true;try{const objResult=await api('/api/admin/accounts/update',{id:strSelectedId,role:$('update-role').value,disabled:$('update-disabled').value==='true',currentPassword:$('update-password').value});announce(objResult.message);$('update-form').hidden=true;await loadAccounts();}catch(objError){announce(objError.message);}finally{$('update-password').value='';objButton.disabled=false;}};
+init();

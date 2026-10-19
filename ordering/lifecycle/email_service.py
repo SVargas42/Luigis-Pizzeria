@@ -33,5 +33,6 @@ def dispatch_receipt(objReceipt):
                 objSmtp.send_message(objMessage)
             return
         except Exception:
-            objLogger.warning('SMTP dispatch failed; receipt follows in local log')
-    objLogger.warning('Receipt for %s\n%s', objReceipt['customer']['email'], strBody)
+            objLogger.warning('SMTP receipt delivery failed; order remains committed. Check email configuration.')
+            return
+    objLogger.warning('SMTP receipt delivery is not configured; order remains committed.')

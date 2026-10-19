@@ -9,7 +9,7 @@ from typing import Literal
 from uuid import UUID
 
 import pymysql
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import Header, BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -273,7 +273,7 @@ def lock_order(objCursor, nOrderId):
 
 
 @app.patch('/api/employee/orders/{nOrderId}/status', dependencies=[Depends(require_staff)])
-def advance_status(nOrderId: int, objChange: StatusChange):
+def advance_status(nOrderId: int, objChange: StatusChange, x_luigi_actor: str = Header(default="staff")):
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)
         nIndex = arrStages.index(objOrder['tracking_status'])
@@ -281,7 +281,7 @@ def advance_status(nOrderId: int, objChange: StatusChange):
             raise HTTPException(409, 'Order changed or transition is not sequential; refresh queue')
         strLegacy = 'ready' if nIndex == 3 else 'preparing' if nIndex >= 1 else 'received'
         objCursor.execute('UPDATE orders SET tracking_status=%s,status=%s WHERE id=%s', (objChange.status, strLegacy, nOrderId))
-        objCursor.execute("INSERT INTO order_events(order_id,event_type,from_status,to_status,details) VALUES(%s,'status_changed',%s,%s,%s)", (nOrderId, objOrder['status'], strLegacy, objChange.status))
+        objCursor.execute("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(%s,%s,'status_changed',%s,%s,%s)", (nOrderId, x_luigi_actor[:254], objOrder['status'], strLegacy, objChange.status))
     return {'status': objChange.status}
 
 
@@ -294,18 +294,20 @@ def set_estimate(nOrderId: int, objEstimate: Estimate):
 
 
 @app.post('/api/employee/orders/{nOrderId}/complete', dependencies=[Depends(require_staff)])
-def complete_order(nOrderId: int, objCompletion: Completion):
+def complete_order(nOrderId: int, objCompletion: Completion, x_luigi_actor: str = Header(default="staff")):
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)
         if objOrder['tracking_status'] != objCompletion.expectedStatus:
             raise HTTPException(409, 'Only ready orders can be archived')
         objCursor.execute("UPDATE orders SET status='completed' WHERE id=%s", (nOrderId,))
-        objCursor.execute("INSERT INTO order_events(order_id,event_type,from_status,to_status,details) VALUES(%s,'status_changed','ready','completed','Picked up and archived')", (nOrderId,))
+        objCursor.execute("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(%s,%s,'status_changed','ready','completed','Picked up and archived')", (nOrderId, x_luigi_actor[:254]))
     return {'status': 'completed'}
 
 
 @app.post('/api/orders', status_code=201)
 def create_order(objPayload: Checkout, objTasks: BackgroundTasks):
+    if objPayload.paymentMethod != 'in_store':
+        raise HTTPException(400, 'Online orders must be created by verified Stripe fulfillment')
     # InnoDB may choose either concurrent checkout as a deadlock victim. Its
     # transaction has already rolled back; retry the same key against the winner.
     for nAttempt in range(3):
