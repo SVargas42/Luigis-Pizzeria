@@ -1,7 +1,7 @@
 // Transactional test adapter only; production always uses MariaDB.
 export function paymentStore(){
  let objState={payments:[],customers:[],orders:[],items:[],events:new Map(),refunds:new Map(),mail:[],reservations:new Map()};
- let prLock=Promise.resolve();const mapMenu=new Map([['pizza:Small',1000],['pizza:Large',1600],['topping:Cheese',150],['side:Breadsticks',500],['drink:Medium',275]]);
+ let prLock=Promise.resolve();const mapMenu=new Map([['pizza:Small',1000],['pizza:Medium',1300],['pizza:Large',1600],['topping:Cheese',150],['side:Breadsticks',500],['side:Pizza Bites',600],['drink:Small',200],['drink:Medium',275],['drink:Large',350],['drink_name:Coke',0],['drink_name:Pepsi',0],['drink_name:Dr Pepper',0],['drink_name:Water',0]]);
  const objFlags={failItems:false};
  const copy=objValue=>structuredClone(objValue);
  async function query(strSql,arrValues=[]){
