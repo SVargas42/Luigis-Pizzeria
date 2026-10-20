@@ -14,7 +14,7 @@ test('live MariaDB Stripe quote, paid fulfillment, receipt email, retry and roll
   const objService=createPaymentService(objPool,objStripe,{enabled:true,liveMode:false,siteUrl:'http://127.0.0.1:3000',taxBasisPoints:0});
   const objInput={requestKey:strKey,checkoutToken:'a'.repeat(64),customer:{firstName:'Database',lastName:'Stripe',email:strEmail,phone:'5551234567'},pizzas:[{size:'Small',toppings:[]}],sides:[],drinks:[]};
   await objService.createCheckout(objInput,null);assert.equal((await objService.checkoutStatus(objInput,null)).state,'open');
-  objSession.status='complete';objSession.payment_status='paid';objSession.payment_intent='pi_db_'+strKey.replaceAll('-','');
+  objSession.status='complete';objSession.payment_status='paid';objSession.payment_intent='pi_db'+strKey.replaceAll('-','');
   const objFirst=await objService.fulfill(objSession.id,'evt_db_'+strKey,'checkout.session.completed');const objAgain=await objService.fulfill(objSession.id,'evt_db_'+strKey,'checkout.session.completed');assert.equal(objFirst.orderId,objAgain.orderId);assert.equal(objFirst.paymentStatus,'paid');assert.match(objFirst.trackerUrl,/token=/);
   const [objCount]=await objConnection.query('SELECT COUNT(*) AS n FROM orders WHERE request_key=?',[strKey]);assert.equal(Number(objCount.n),1);
   const [objMail]=await objConnection.query("SELECT COUNT(*) AS n FROM account_mail WHERE recipient=? AND purpose='receipt'",[strEmail]);assert.equal(Number(objMail.n),1);
