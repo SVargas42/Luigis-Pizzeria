@@ -32,3 +32,13 @@ test('demo workspace includes analytics and only sample customer entries',()=>{
  const arrCustomers=handleDemoAdminRequest('/api/admin/customers?q=alex',{},objState,objNow);
  assert.deepEqual(arrCustomers.map(objCustomer=>objCustomer.email),['alex.morgan@example.com']);
 });
+
+test('demo menu supports adding and editing available items with price changes',()=>{
+ const objState=createDemoAdminState(objNow);
+ const objAdded=handleDemoAdminRequest('/api/admin/menu',{method:'POST',body:JSON.stringify({category:'side',name:'Garlic Knots',priceCents:725})},objState,objNow);
+ assert.equal(objAdded.price_cents,725);
+ const objEdited=handleDemoAdminRequest('/api/admin/menu/side/Garlic%20Knots',{method:'PATCH',body:JSON.stringify({name:'Garlic Bread',priceCents:800})},objState,objNow);
+ assert.deepEqual(objEdited,{category:'side',name:'Garlic Bread',price_cents:800});
+ assert.ok(!objState.menuRows.some(objRow=>objRow.name==='Garlic Knots'));
+ assert.throws(()=>handleDemoAdminRequest('/api/admin/menu',{method:'POST',body:JSON.stringify({category:'side',name:'Garlic Bread',priceCents:800})},objState,objNow),/already exists/);
+});

@@ -21,7 +21,8 @@ INSERT IGNORE INTO menu_prices VALUES
  ('topping','Cheese',150),('topping','Pepperoni',150),('topping','Sausage',150),
  ('topping','Pineapple',150),('topping','Olives',150),('topping','Barbeque Chicken',150),
  ('side','Breadsticks',500),('side','Pizza Bites',600),
- ('drink','Small',200),('drink','Medium',275),('drink','Large',350);
+ ('drink','Small',200),('drink','Medium',275),('drink','Large',350),
+ ('drink_name','Coke',0),('drink_name','Pepsi',0),('drink_name','Dr Pepper',0),('drink_name','Water',0);
 CREATE TABLE IF NOT EXISTS orders (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  request_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,

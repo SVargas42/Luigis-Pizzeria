@@ -27,6 +27,13 @@ const objStripeConfig={enabled:bStripeEnabled,liveMode:process.env.STRIPE_MODE==
 const objStripe=bStripeConfigured?new Stripe(process.env.STRIPE_SECRET_KEY,{maxNetworkRetries:2,timeout:10000}):null;
 const objPayments=createPaymentService(pool,objStripe,objStripeConfig);
 const allowedTransitions = {received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
+const allowedMenuCategories = new Set(['pizza','topping','side','drink','drink_name']);
+function validMenuEntry(entry) {
+ const category=entry?.category,name=typeof entry?.name==='string'?entry.name.trim():'';
+ const price=entry?.priceCents;
+ if(!allowedMenuCategories.has(category)||! /^[A-Za-z0-9][A-Za-z0-9 '&-]{0,59}$/.test(name)||!Number.isInteger(price)||price<0||price>1000000||(category!=='drink_name'&&price===0))throw new Error('Enter a valid menu type, item name, and price.');
+ return {category,name,price};
+}
 function send(res,status,data) { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); res.end(JSON.stringify(data)); }
 
 async function isAdminRequest(req) {
@@ -151,6 +158,18 @@ const server = http.createServer(async(req,res)=>{
   if (req.method==='GET' && url.pathname==='/api/admin/customers') {
    const q=(url.searchParams.get('q') || '').slice(0,100);
    return send(res,200,await pool.query('SELECT c.id,c.first_name,c.last_name,c.email,c.phone,COUNT(o.id) AS order_count,COALESCE(SUM(CASE WHEN o.status <> \'cancelled\' THEN o.total_cents ELSE 0 END),0) AS total_cents,MAX(o.created_at) AS last_order FROM customers c LEFT JOIN orders o ON o.customer_id=c.id WHERE c.email LIKE ? OR c.last_name LIKE ? GROUP BY c.id ORDER BY c.updated_at DESC LIMIT 100',[`%${q}%`,`%${q}%`]));
+  }
+  if(req.method==='GET'&&url.pathname==='/api/admin/menu')return send(res,200,await pool.query('SELECT category,name,price_cents FROM menu_prices ORDER BY FIELD(category,\'pizza\',\'topping\',\'side\',\'drink_name\',\'drink\'),name'));
+  if(req.method==='POST'&&url.pathname==='/api/admin/menu'){
+   let entry;try{entry=validMenuEntry(await body(req));}catch(error){return send(res,400,{error:error.message||'Invalid menu item.'});}
+   try{await pool.query('INSERT INTO menu_prices(category,name,price_cents) VALUES(?,?,?)',[entry.category,entry.name,entry.price]);return send(res,201,{category:entry.category,name:entry.name,price_cents:entry.price});}
+   catch(error){if(error.code==='ER_DUP_ENTRY')return send(res,409,{error:'That menu item already exists in this category.'});throw error;}
+  }
+  const menuMatch=url.pathname.match(/^\/api\/admin\/menu\/(pizza|topping|side|drink|drink_name)\/([^/]+)$/);
+  if(req.method==='PATCH'&&menuMatch){
+   let entry;try{entry=validMenuEntry({...await body(req),category:menuMatch[1]});entry.previousName=decodeURIComponent(menuMatch[2]);}catch(error){return send(res,400,{error:error.message||'Invalid menu item.'});}
+   try{const result=await pool.query('UPDATE menu_prices SET name=?,price_cents=? WHERE category=? AND name=?',[entry.name,entry.price,entry.category,entry.previousName]);if(!result.affectedRows)return send(res,404,{error:'Menu item not found.'});return send(res,200,{category:entry.category,name:entry.name,price_cents:entry.price});}
+   catch(error){if(error.code==='ER_DUP_ENTRY')return send(res,409,{error:'That menu item already exists in this category.'});throw error;}
   }
   const match=url.pathname.match(/^\/api\/admin\/orders\/(\d+)$/);
   if (req.method==='PATCH' && match) {

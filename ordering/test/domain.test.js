@@ -42,6 +42,7 @@ test('weekday, daily average, and monthly series have plausible date-aligned per
  assert.equal(objMonthly.points.at(-1).label,'Mar 2026');
  assert.ok(objMonthly.points.at(-1).value<objMonthly.points.at(-2).value*2);
  assert.equal(statusLabel('ready'),'Ready for pickup');
+ assert.equal(statusLabel('preparing'),'Baking');
  assert.throws(()=>buildSyntheticAnalytics('actual-sales',objNow),RangeError);
 });
 
@@ -54,6 +55,10 @@ test('item comparison offers aligned days and months without future labels',()=>
  assert.equal(objMonth.labels.length,6);
  assert.equal(objMonth.labels.at(-1),'Mar 2026');
  assert.ok(objWeek.series.every(objSeries=>objSeries.values.length===7&&objSeries.values.every(Number.isInteger)));
+ const objDrinkSize=buildSyntheticItemComparison('drink-size:Large','topping:Cheese','week',objNow);
+ const objDrinkName=buildSyntheticItemComparison('drink:Coke','topping:Cheese','week',objNow);
+ assert.match(objDrinkSize.title,/Large drinks compared with Cheese/);
+ assert.match(objDrinkName.title,/Coke compared with Cheese/);
 });
 
 test('employee and business reports keep synthetic counts and shifts bounded by current time',()=>{

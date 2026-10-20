@@ -22,3 +22,10 @@ test('card totals include cancelled-but-not-refunded charges and separate refund
  const arrCards=[{id:1,status:'cancelled',total_cents:2000,created_at:'2026-10-18T01:00:00Z',payment_method:'online',payment_status:'paid',refunded_cents:0},{id:2,status:'completed',total_cents:1500,created_at:'2026-10-18T02:00:00Z',payment_method:'online',payment_status:'partially_refunded',refunded_cents:500}];
  const objData=calculateAnalytics(arrCards,[],[],[],objNow);assert.equal(objData.business.paidCardCents,3000);assert.equal(objData.business.refundedCardCents,500);assert.equal(objData.business.salesTodayCents,1500);
 });
+test('product analytics can compare a drink flavor across sizes and a drink size across flavors',()=>{
+ const arrDrinkItems=[...arrItems,{order_id:1,kind:'drink',description:'Coke (Small)',quantity:2},{order_id:1,kind:'drink',description:'Coke (Large)',quantity:1},{order_id:1,kind:'drink',description:'Pepsi (Large)',quantity:3}];
+ const objProducts=calculateAnalytics(arrOrders,arrDrinkItems,[],[],objNow).products;
+ assert.equal(objProducts('drink:Coke','topping:Cheese','week').series[0].values.at(-1),3);
+ assert.equal(objProducts('drink-size:Large','topping:Cheese','week').series[0].values.at(-1),4);
+ assert.throws(()=>objProducts('beverage:Coke','pizza:Small','week'));
+});

@@ -9,7 +9,7 @@ const strScript=strHtml.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1]
 test('staff screen script parses and includes all requested workspace tabs',()=>{
  assert.ok(strScript);
  new vm.Script(strScript.replace(/^ *import .*;\r?\n/gm,'').trim());
- for(const strTab of ['Current Orders','Past Orders','Ordering Analytics','Employee Data','Business Data','Customers'])assert.ok(strHtml.includes(strTab));
+ for(const strTab of ['Current Orders','Past Orders','Ordering Analytics','Employee Data','Business Data','Customers','Menu and pricing'])assert.ok(strHtml.includes(strTab));
  assert.ok(strHtml.includes('aria-selected="true"'));
  assert.ok(!/synthetic|sample data only|school project/i.test(strHtml));
  assert.ok(strScript.includes('const bDemoMode=false;'));
@@ -20,6 +20,10 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
  assert.ok(!strHtml.includes('Accessible comparison values'));
  assert.ok(!strHtml.includes('data table'));
  assert.ok(strScript.includes("setAttribute('role','img')"));
+ assert.ok(strScript.includes('performance-low')&&strScript.includes('performance-mid')&&strScript.includes('performance-high'));
+ assert.ok(strScript.includes('Drink size · ${objRow.name}')&&strScript.includes('Drink · ${objRow.name}'));
+ assert.ok(strScript.includes("objTab.dataset.panel==='menu'"));
+ assert.ok(strScript.includes("objQuantity.type='number'"));
 });
 
 test('staff lifecycle controls submit sequential status, UTC estimate and archive requests',async()=>{

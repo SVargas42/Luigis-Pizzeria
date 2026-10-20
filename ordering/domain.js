@@ -1,5 +1,5 @@
 const arrCurrentStatuses = ['received', 'preparing', 'ready'];
-const objStatusNames = {received: 'Order received', preparing: 'Being prepared', ready: 'Ready for pickup', completed: 'Picked up', cancelled: 'Cancelled'};
+const objStatusNames = {received: 'Order received', preparing: 'Baking', ready: 'Ready for pickup', completed: 'Picked up', cancelled: 'Cancelled'};
 const objAllowedTransitions = {received: ['preparing', 'cancelled'], preparing: ['ready', 'cancelled'], ready: ['completed', 'cancelled'], completed: [], cancelled: []};
 
 export function canTransitionStatus(strCurrent,strNext) {
@@ -102,8 +102,15 @@ function itemFactor(strItemKey) {
   let nHash=0;
   for(const strCharacter of strItemKey)nHash=(nHash*31+strCharacter.charCodeAt(0))%997;
   const strCategory=strItemKey.split(':')[0];
-  const nBase={pizza:.42,drink:.22,side:.13,topping:.2}[strCategory]||.1;
+  const nBase={pizza:.42,drink:.22,'drink-size':.22,side:.13,topping:.2}[strCategory]||.1;
   return nBase*(.72+(nHash%57)/100);
+}
+
+function itemLabel(strItemKey){
+  const nDivider=strItemKey.indexOf(':');if(nDivider<0)return strItemKey;
+  const strCategory=strItemKey.slice(0,nDivider),strName=strItemKey.slice(nDivider+1);
+  if(strCategory==='drink-size')return `${strName} drinks`;
+  return strName;
 }
 
 export function buildSyntheticItemComparison(strLeftKey,strRightKey,strPeriod='week',objNow=new Date()) {
@@ -119,10 +126,10 @@ export function buildSyntheticItemComparison(strLeftKey,strRightKey,strPeriod='w
   const objToday=buildSyntheticAnalytics('today',objNow);
   return {
     synthetic:true,
-    title:`${strLeftKey.replace(':',' · ')} compared with ${strRightKey.replace(':',' · ')}`,
+    title:`${itemLabel(strLeftKey)} compared with ${itemLabel(strRightKey)}`,
     period:strPeriod==='months'?'Last 6 months':strPeriod==='month'?'Last 30 days':'Last 7 days',
     labels:arrLabels,
-    series:[{key:strLeftKey,label:strLeftKey.split(':').slice(1).join(':')||strLeftKey,values:fnValues(strLeftKey)},{key:strRightKey,label:strRightKey.split(':').slice(1).join(':')||strRightKey,values:fnValues(strRightKey)}],
+    series:[{key:strLeftKey,label:itemLabel(strLeftKey),values:fnValues(strLeftKey)},{key:strRightKey,label:itemLabel(strRightKey),values:fnValues(strRightKey)}],
     asOf:objToday.asOf
   };
 }
