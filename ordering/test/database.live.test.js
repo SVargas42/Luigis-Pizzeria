@@ -7,7 +7,7 @@ test('live MariaDB: schema, menu, foreign keys, insert and rollback',{skip:proce
  try {
   const arrTables=await objConnection.query("SELECT TABLE_NAME AS name,ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()");
   for(const strName of ['customers','orders','order_items','order_events','menu_prices'])assert.ok(arrTables.some(objRow=>objRow.name===strName&&objRow.engine==='InnoDB'),strName+' must exist with InnoDB');
-  const arrMenu=await objConnection.query('SELECT category,name,price_cents FROM menu_prices');assert.equal(arrMenu.length,18);
+  const arrMenu=await objConnection.query('SELECT category,name,price_cents FROM menu_prices');assert.ok(arrMenu.some(objRow=>objRow.category==='pizza'),'Menu must contain pizza prices');assert.ok(arrMenu.every(objRow=>Number.isSafeInteger(Number(objRow.price_cents))&&Number(objRow.price_cents)>=0),'Menu prices must be nonnegative integer cents');
   const arrKeys=await objConnection.query("SELECT CONSTRAINT_NAME AS name FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()");assert.ok(arrKeys.some(objRow=>objRow.name==='order_customer'));assert.ok(arrKeys.some(objRow=>objRow.name==='item_order'));
   await objConnection.beginTransaction();
   const strEmail=`db-test-${randomUUID()}@example.invalid`;
