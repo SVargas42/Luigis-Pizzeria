@@ -76,6 +76,49 @@ def payload(strMethod='in_store'):
     return {'requestKey': str(uuid4()), 'customer': {'firstName': 'Ada', 'lastName': 'Lovelace', 'email': 'ada@example.com', 'phone': '5551234567'}, 'pizzas': [{'size': 'Small', 'toppings': ['Cheese']}], 'sides': [{'name': 'Breadsticks', 'quantity': 2}], 'drinks': [{'name': 'Water', 'size': 'Small', 'quantity': 1}], 'paymentMethod': strMethod, 'totalCents': 1}
 
 
+@pytest.mark.parametrize('arrNames', [
+    ['Breadsticks', 'Pizza Bites'],
+    ['Breadsticks', 'Pizza Stick'],
+    ['Pizza Bites', 'Pizza Stick'],
+    ['Breadsticks', 'Pizza Bites', 'Pizza Stick'],
+])
+def test_multiple_menu_sides_are_priced_saved_and_retry_without_duplicates(objHarness, arrNames):
+    objClient, objConnection, _ = objHarness
+    objConnection.execute("INSERT INTO menu_prices(category,name,price_cents) VALUES('side','Pizza Bites',600),('side','Pizza Stick',350)")
+    objConnection.commit()
+    objPayload = payload()
+    objPayload['sides'] = [{'name': strName, 'quantity': 2} for strName in arrNames]
+    objResponse = objClient.post('/api/orders', json=objPayload)
+    assert objResponse.status_code == 201, objResponse.text
+    arrSides = [objItem for objItem in objResponse.json()['items'] if objItem['kind'] == 'side']
+    assert len(arrSides) == len(arrNames)
+    assert all(objItem['quantity'] == 2 for objItem in arrSides)
+    objPrices = {'Breadsticks': 500, 'Pizza Bites': 600, 'Pizza Stick': 350}
+    nExpectedSubtotal = 1150 + 200 + sum(objPrices[strName] * 2 for strName in arrNames)
+    assert objResponse.json()['subtotalCents'] == nExpectedSubtotal
+    assert objResponse.json()['totalCents'] == nExpectedSubtotal + (nExpectedSubtotal * 825 + 5000) // 10000
+    assert objClient.post('/api/orders', json=objPayload).json() == objResponse.json()
+    assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 1
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
+
+
+@pytest.mark.parametrize('objQuantity', [0, -1, 100, 1.5, '2', True])
+def test_side_quantities_still_reject_invalid_values(objHarness, objQuantity):
+    objPayload = payload()
+    objPayload['sides'][0]['quantity'] = objQuantity
+    assert objHarness[0].post('/api/orders', json=objPayload).status_code == 422
+    assert objHarness[1].execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 0
+
+
+def test_side_quantity_upper_bound_and_unlisted_side_validation(objHarness):
+    objPayload = payload()
+    objPayload['sides'][0]['quantity'] = 99
+    assert objHarness[0].post('/api/orders', json=objPayload).status_code == 201
+    objPayload = payload()
+    objPayload['sides'][0]['name'] = 'Not on the menu'
+    assert objHarness[0].post('/api/orders', json=objPayload).status_code == 422
+
+
 @pytest.mark.parametrize('bOmitted', [False, True])
 def test_guest_pickup_optional_phone_matches_the_form(objHarness, bOmitted):
     objClient, objConnection, _ = objHarness

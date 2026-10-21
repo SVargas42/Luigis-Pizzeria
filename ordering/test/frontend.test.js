@@ -29,6 +29,13 @@ test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
 
+test('checkout submits multiple distinct side selections as separate numeric quantities',async()=>{
+ const objHarness=createHarness();
+ vm.runInContext("state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}];",objHarness.objContext);
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.deepEqual(objHarness.arrRequests[0].sides,[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}]);
+});
+
 test('cancelled customer order history overrides its former preparation stage',()=>{
  const objHarness=createHarness();
  vm.runInContext("renderCustomerOrders([{id:7,status:'cancelled',tracking_status:'cooking_order',total_cents:1000,created_at:'2026-10-21T12:00:00Z',items:[]}])",objHarness.objContext);
