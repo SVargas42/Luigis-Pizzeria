@@ -39,9 +39,20 @@ test('registration alerts handle success, rejections, retry, network failure and
  const fillForm=async()=>{
   await objPage.goto(`http://127.0.0.1:${objServer.address().port}/account?mode=register`);
   assert.equal(await objPage.locator('#register-alert').isVisible(),false);
-  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Tester'],['phone','5551234567'],['email','ada@example.com'],['password','a long test passphrase']])await objPage.locator('#'+strId).fill(strValue);
+  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Tester'],['phone','5551234567'],['email','ada@example.com'],['password','a long test passphrase'],['confirmPassword','a long test passphrase']])await objPage.locator('#'+strId).fill(strValue);
  };
  const submit=async()=>{await objPage.locator('#submit').click();await objPage.locator('#register-alert:not(.d-none)').waitFor();};
+ await fillForm();
+ for(const strConfirmation of ['a long test passphrasE','a long test passphrase ']){
+  await objPage.locator('#confirmPassword').fill(strConfirmation);
+  await objPage.locator('#confirmPassword').press('Enter');
+  await objPage.locator('#register-alert:not(.d-none)').waitFor();
+  assert.equal(await objPage.locator('#register-alert').textContent(),'Passwords do not match.');
+  assert.match(await objPage.locator('#register-alert').getAttribute('class'),/alert-danger/);
+  assert.equal(await objPage.locator('#register-alert').evaluate(objElement=>objElement===document.activeElement),true);
+  assert.equal(await objPage.locator('#submit').isEnabled(),true);
+  assert.equal(arrRequests.length,0);
+ }
  for(const [nResponseStatus,strError] of [[400,'Use a password between 12 and 128 characters.'],[409,'An account with this email already exists.'],[429,'Too many attempts.'],[503,'Account service is temporarily unavailable.']]){
   await fillForm();nStatus=nResponseStatus;objBody={error:strError};await submit();
   assert.equal(await objPage.locator('#register-alert').textContent(),'Error: '+strError);
@@ -54,6 +65,14 @@ test('registration alerts handle success, rejections, retry, network failure and
  assert.match(await objPage.locator('#register-alert').getAttribute('class'),/alert-success/);
  assert.equal(await objPage.locator('#account-form').isVisible(),false);assert.equal(await objPage.locator('#password').inputValue(),'');
  assert.equal(arrRequests.at(-1).email,'ada@example.com');
+ assert.equal(await objPage.locator('#confirmPassword').inputValue(),'');
+ assert.equal(Object.hasOwn(arrRequests.at(-1),'confirmPassword'),false);
+ for(const strMode of ['login','forgot','reset','invite','password']){
+  await objPage.goto(`http://127.0.0.1:${objServer.address().port}/account?mode=${strMode}`);
+  await objPage.waitForFunction(()=>document.querySelector('#title').textContent!=='Your account'||document.querySelector('#message').textContent!=='');
+  assert.equal(await objPage.locator('#confirmPassword').isVisible(),false);
+  assert.equal(await objPage.locator('#confirmPassword').evaluate(objElement=>objElement.required),false);
+ }
  await fillForm();nStatus=0;await submit();assert.match(await objPage.locator('#register-alert').textContent(),/Error: Unable to complete registration/);
  assert.equal(await objPage.locator('#submit').isEnabled(),true);
  nStatus=400;objBody={error:'<img src=x onerror="window.alert(1)">'};await submit();
