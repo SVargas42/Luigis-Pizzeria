@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+import pymysql
 from fastapi.testclient import TestClient
 
 objModule = importlib.import_module('ordering.lifecycle.app')
@@ -19,7 +20,12 @@ class CursorAdapter:
         strSql = strSql.replace('%s', '?').replace(' FOR UPDATE', '')
         if 'ON DUPLICATE KEY' in strSql:
             strSql = strSql.split(' ON DUPLICATE KEY')[0].replace('INSERT INTO', 'INSERT OR IGNORE INTO')
-        self.objCursor = self.objConnection.execute(strSql, arrParams)
+        try:
+            self.objCursor = self.objConnection.execute(strSql, arrParams)
+        except sqlite3.IntegrityError as objError:
+            if str(objError).startswith('UNIQUE constraint failed'):
+                raise pymysql.IntegrityError(1062, 'Duplicate entry') from objError
+            raise
         self.lastrowid = self.objCursor.lastrowid
 
     def fetchone(self):
@@ -44,8 +50,8 @@ def objHarness(monkeypatch):
         CREATE TABLE orders(id INTEGER PRIMARY KEY,request_key TEXT UNIQUE,customer_id INTEGER REFERENCES customers(id),customer_name TEXT,customer_email TEXT,customer_phone TEXT,total_cents INTEGER,payment_method TEXT,tracking_token TEXT UNIQUE,tracking_status TEXT,payment_status TEXT,subtotal_cents INTEGER,tax_cents INTEGER,estimated_pickup_time timestamp,status TEXT DEFAULT 'received',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE order_items(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),kind TEXT,description TEXT,quantity INTEGER,unit_price_cents INTEGER);
         CREATE TABLE order_events(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),actor_email TEXT,event_type TEXT,from_status TEXT,to_status TEXT,details TEXT);
-        CREATE TABLE menu_prices(category TEXT,name TEXT,price_cents INTEGER);
-        INSERT INTO menu_prices VALUES('pizza','Small',1000),('topping','Cheese',150),('side','Breadsticks',500),('drink','Small',200);
+        CREATE TABLE menu_prices(category TEXT,name TEXT,price_cents INTEGER,description TEXT DEFAULT '',is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name));
+        INSERT INTO menu_prices(category,name,price_cents) VALUES('pizza','Small',1000),('topping','Cheese',150),('side','Breadsticks',500),('drink','Small',200),('drink_name','Water',0);
     ''')
     @contextmanager
     def test_database():
@@ -93,6 +99,26 @@ def test_checkout_retry_receipt_tracker_and_mail(objHarness):
 def test_online_order_cannot_bypass_verified_stripe_fulfillment(objHarness):
     assert objHarness[0].post('/api/orders', json=payload('online')).status_code == 400
     assert objHarness[1].execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('strCategory,strName', [
+    ('pizza', 'Small'), ('topping', 'Cheese'), ('side', 'Breadsticks'),
+    ('drink', 'Small'), ('drink_name', 'Water'),
+])
+def test_inactive_menu_choices_reject_new_orders_but_preserve_receipts(objHarness, strCategory, strName):
+    objClient, objConnection, arrMail = objHarness
+    objPayload = payload()
+    objOriginal = objClient.post('/api/orders', json=objPayload)
+    assert objOriginal.status_code == 201
+    arrOriginalItems = objConnection.execute('SELECT * FROM order_items').fetchall()
+    objConnection.execute('UPDATE menu_prices SET is_active=0 WHERE category=? AND name=?',
+                          (strCategory, strName))
+    objConnection.commit()
+    assert objClient.post('/api/orders', json=payload()).status_code == 422
+    assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 1
+    assert objConnection.execute('SELECT * FROM order_items').fetchall() == arrOriginalItems
+    assert objClient.post('/api/orders', json=objPayload).json() == objOriginal.json()
+    assert len(arrMail) == 1
 
 
 @pytest.mark.parametrize('strField,objValue', [('phone',''),('phone','-------'),('email','bad'),('firstName',' ')])

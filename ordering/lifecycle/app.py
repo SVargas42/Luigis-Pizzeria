@@ -16,6 +16,10 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from .email_service import dispatch_receipt
+from .menu_queries import (
+    strActiveMenuQuery, strAdminMenuQuery, strInsertMenuQuery,
+    strUpdateMenuQuery, strDeleteMenuQuery, strLockMenuQuery,
+)
 
 arrStages = ('order_received', 'order_confirmed', 'preparing_order', 'cooking_order', 'order_ready')
 objSecurity = HTTPBasic()
@@ -45,18 +49,18 @@ class Customer(BaseModel):
 
 
 class Pizza(BaseModel):
-    size: Literal['Small', 'Medium', 'Large']
+    size: str = Field(min_length=1, max_length=60)
     toppings: list[str] = Field(max_length=6)
 
 
 class Side(BaseModel):
-    name: Literal['Breadsticks', 'Pizza Bites']
-    quantity: StrictInt = Field(ge=1, le=10)
+    name: str = Field(min_length=1, max_length=60)
+    quantity: StrictInt = Field(ge=1, le=99)
 
 
 class Drink(BaseModel):
-    name: Literal['Coke', 'Pepsi', 'Dr Pepper', 'Water']
-    size: Literal['Small', 'Medium', 'Large']
+    name: str = Field(min_length=1, max_length=60)
+    size: str = Field(min_length=1, max_length=60)
     quantity: StrictInt = Field(ge=1, le=10)
 
 
@@ -64,7 +68,7 @@ class Checkout(BaseModel):
     requestKey: UUID
     customer: Customer
     pizzas: list[Pizza] = Field(min_length=1, max_length=20)
-    sides: list[Side] = Field(max_length=2)
+    sides: list[Side] = Field(max_length=20)
     drinks: list[Drink] = Field(max_length=20)
     paymentMethod: Literal['online', 'in_store']
 
@@ -96,6 +100,40 @@ class Estimate(BaseModel):
         return dtValue.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+MenuCategory = Literal['pizza', 'topping', 'side', 'drink', 'drink_name']
+
+
+class MenuChange(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    description: str = Field(default='', max_length=1000)
+    priceCents: StrictInt = Field(ge=0, le=1000000)
+    model_config = ConfigDict(extra='forbid')
+
+    @field_validator('name')
+    @classmethod
+    def menu_name_valid(cls, strValue):
+        strName = strValue.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 '&-]{0,59}", strName):
+            raise ValueError('Enter a valid menu item name')
+        return strName
+
+    @field_validator('description')
+    @classmethod
+    def menu_description_valid(cls, strValue):
+        if any(ord(strChar) < 32 and strChar not in '\n\t' for strChar in strValue):
+            raise ValueError('Description contains unsupported control characters')
+        return strValue.strip()
+
+
+class MenuCreate(MenuChange):
+    category: MenuCategory
+
+
+class MenuDelete(BaseModel):
+    confirmation: str = Field(max_length=100)
+    model_config = ConfigDict(extra='forbid')
+
+
 def require_staff(objCredentials: HTTPBasicCredentials = Depends(objSecurity)):
     strUser, strPassword = os.getenv('ADMIN_USER', ''), os.getenv('ADMIN_PASSWORD', '')
     if not strUser or not strPassword or not (
@@ -108,7 +146,7 @@ def require_staff(objCredentials: HTTPBasicCredentials = Depends(objSecurity)):
 @app.middleware('http')
 async def protect_request(objRequest: Request, fnNext):
     strOrigin = objRequest.headers.get('origin')
-    if objRequest.method in ('POST', 'PATCH') and strOrigin and strOrigin.rstrip('/') != os.getenv('SITE_URL', '').rstrip('/'):
+    if objRequest.method in ('POST', 'PATCH', 'DELETE') and strOrigin and strOrigin.rstrip('/') != os.getenv('SITE_URL', '').rstrip('/'):
         return JSONResponse({'error': 'Invalid request origin'}, status_code=403)
     objResponse = await fnNext(objRequest)
     objResponse.headers['Cache-Control'] = 'no-store'
@@ -124,12 +162,16 @@ async def http_error(objRequest, objError):
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(objRequest, objError):
+    if objRequest.url.path.startswith('/api/admin/menu'):
+        return JSONResponse({'error': 'Check the menu type, name, description, whole-cent price and confirmation.'}, status_code=422)
     return JSONResponse({'error': 'Check contact details, menu selections and required fields.'}, status_code=422)
 
 
 @app.exception_handler(pymysql.MySQLError)
 async def database_error(objRequest, objError):
     logging.getLogger(__name__).error('Database operation failed (%s)', type(objError).__name__)
+    if objRequest.url.path.startswith('/api/admin/menu'):
+        return JSONResponse({'error': 'Menu service unavailable. Refresh the menu before retrying.'}, status_code=503)
     return JSONResponse({'error': 'Ordering service unavailable. Retry with the same request key.'}, status_code=503)
 
 
@@ -154,6 +196,71 @@ def database():
         objConnection.close()
 
 
+@contextmanager
+def menu_database():
+    try:
+        with database() as objCursor:
+            yield objCursor
+    except pymysql.IntegrityError as objError:
+        if objError.args[0] == 1062:
+            raise HTTPException(409, 'That menu name is already reserved in this category, including removed items.') from objError
+        raise
+
+
+def validate_menu_price(strCategory, nPrice):
+    if nPrice == 0 and strCategory != 'drink_name':
+        raise HTTPException(422, 'Only drink names may have a zero price adjustment.')
+
+
+def lock_menu_item(objCursor, strCategory, strName):
+    objCursor.execute(strLockMenuQuery, (strCategory, strName))
+    objItem = objCursor.fetchone()
+    if not objItem:
+        raise HTTPException(404, 'Active menu item not found. Refresh the menu.')
+    return objItem
+
+
+@app.get('/api/admin/menu', dependencies=[Depends(require_staff)])
+def list_menu_items():
+    with menu_database() as objCursor:
+        objCursor.execute(strAdminMenuQuery)
+        return objCursor.fetchall()
+
+
+@app.post('/api/admin/menu', status_code=201, dependencies=[Depends(require_staff)])
+def add_menu_item(objInput: MenuCreate):
+    validate_menu_price(objInput.category, objInput.priceCents)
+    with menu_database() as objCursor:
+        objCursor.execute(strInsertMenuQuery, (objInput.category, objInput.name,
+                          objInput.description, objInput.priceCents))
+    return {'category': objInput.category, 'name': objInput.name,
+            'description': objInput.description, 'price_cents': objInput.priceCents, 'is_active': 1}
+
+
+@app.patch('/api/admin/menu/{strCategory}/{strName}', dependencies=[Depends(require_staff)])
+def edit_menu_item(strCategory: MenuCategory, strName: str, objInput: MenuChange):
+    validate_menu_price(strCategory, objInput.priceCents)
+    with menu_database() as objCursor:
+        objItem = lock_menu_item(objCursor, strCategory, strName)
+        # Older dashboard clients omit description; preserve the existing text.
+        strDescription = objInput.description if 'description' in objInput.model_fields_set else objItem['description']
+        objCursor.execute(strUpdateMenuQuery, (objInput.name, strDescription,
+                          objInput.priceCents, strCategory, objItem['name']))
+    return {'category': strCategory, 'name': objInput.name,
+            'description': strDescription, 'price_cents': objInput.priceCents, 'is_active': 1}
+
+
+@app.delete('/api/admin/menu/{strCategory}/{strName}', dependencies=[Depends(require_staff)])
+def remove_menu_item(strCategory: MenuCategory, strName: str, objInput: MenuDelete):
+    with menu_database() as objCursor:
+        objItem = lock_menu_item(objCursor, strCategory, strName)
+        # Compare with the locked database name, not the client's spelling or casing.
+        if objInput.confirmation != 'DELETE ' + objItem['name']:
+            raise HTTPException(422, 'Type DELETE followed by a space and the exact item name.')
+        objCursor.execute(strDeleteMenuQuery, (strCategory, objItem['name']))
+    return {'category': strCategory, 'name': objItem['name'], 'is_active': 0}
+
+
 def price_items(objPayload, arrMenu):
     mapPrices = {(objRow['category'], objRow['name']): objRow['price_cents'] for objRow in arrMenu}
     def menu_price(strKind, strName):
@@ -170,7 +277,7 @@ def price_items(objPayload, arrMenu):
     for objSide in objPayload.sides:
         arrItems.append({'kind': 'side', 'description': objSide.name, 'quantity': objSide.quantity, 'unit': menu_price('side', objSide.name)})
     for objDrink in objPayload.drinks:
-        arrItems.append({'kind': 'drink', 'description': f'{objDrink.name} ({objDrink.size})', 'quantity': objDrink.quantity, 'unit': menu_price('drink', objDrink.size)})
+        arrItems.append({'kind': 'drink', 'description': f'{objDrink.name} ({objDrink.size})', 'quantity': objDrink.quantity, 'unit': menu_price('drink', objDrink.size) + menu_price('drink_name', objDrink.name)})
     return arrItems
 
 
@@ -196,7 +303,7 @@ def create_order_once(objPayload: Checkout, objTasks: BackgroundTasks):
                 if not objExisting['tracking_token']:
                     raise HTTPException(409, 'Retry key belongs to a legacy checkout')
                 return receipt(objCursor, objExisting)
-            objCursor.execute('SELECT category,name,price_cents FROM menu_prices')
+            objCursor.execute(strActiveMenuQuery)
             arrItems = price_items(objPayload, objCursor.fetchall())
             nSubtotal = sum(objItem['unit'] * objItem['quantity'] for objItem in arrItems)
             nRate = int(os.getenv('TAX_BASIS_POINTS', '0'))

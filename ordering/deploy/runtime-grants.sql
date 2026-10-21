@@ -3,7 +3,7 @@ GRANT SELECT,INSERT,UPDATE ON luigis.customers TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT,UPDATE ON luigis.orders TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT,DELETE ON luigis.order_items TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT ON luigis.order_events TO 'luigis_app'@'127.0.0.1';
-GRANT SELECT ON luigis.menu_prices TO 'luigis_app'@'127.0.0.1';
+GRANT SELECT,INSERT,UPDATE ON luigis.menu_prices TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT,UPDATE ON luigis.accounts TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT,DELETE ON luigis.account_sessions TO 'luigis_app'@'127.0.0.1';
 GRANT SELECT,INSERT,DELETE ON luigis.account_actions TO 'luigis_app'@'127.0.0.1';

@@ -70,7 +70,7 @@ export function createPaymentService(objPool,objStripe,objConfig){
   let [objExisting]=await objPool.query('SELECT * FROM stripe_payments WHERE request_key=?',[objCanonical.requestKey]);
   if(objExisting){authorize(objExisting,objPayload.checkoutToken,objIdentity);if(objExisting.input_hash!==strInputHash)fail(409,'Checkout selections changed. Resume the original payment or start a new order.');}
   else{
-   const arrMenu=await objPool.query('SELECT category,name,price_cents FROM menu_prices');
+   const arrMenu=await objPool.query('SELECT category,name,price_cents FROM menu_prices WHERE is_active = 1');
    const objQuote=makeQuote(objCanonical,new Map(arrMenu.map(objRow=>[`${objRow.category}:${objRow.name}`,Number(objRow.price_cents)])),objConfig.taxBasisPoints);
    const strId=randomUUID(),nExpires=Math.floor(Date.now()/1000)+3600;
    const objParams={mode:'payment',payment_method_types:['card'],customer_email:objQuote.customer.email,client_reference_id:strId,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey},payment_intent_data:{receipt_email:objQuote.customer.email,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey}},success_url:`${strOrigin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${strOrigin}/?checkout=cancelled`,expires_at:nExpires,line_items:objQuote.items.map(objItem=>({price_data:{currency:'usd',unit_amount:objItem.unit,product_data:{name:objItem.description}},quantity:objItem.quantity}))};

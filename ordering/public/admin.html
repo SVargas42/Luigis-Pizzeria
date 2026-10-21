@@ -13,6 +13,9 @@
     .analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}#ordering-average{grid-column:1/-1}.analytics-grid>.chart-box{min-width:0;height:100%;padding:14px;display:flex;flex-direction:column}.analytics-grid .summary-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0 0 10px}.analytics-grid .metric{min-height:82px;padding:12px 14px;display:flex;flex-direction:column;justify-content:center}.analytics-grid .metric-label{font-size:.76rem;line-height:1.3;letter-spacing:.05em}.analytics-grid .metric strong{font-size:clamp(1.65rem,2.3vw,2rem);line-height:1.1;margin-top:4px}.analytics-grid figure{width:100%;min-width:0;flex:1;margin:0;display:flex;flex-direction:column}.analytics-grid figure h3{min-height:2.5em;font-size:1rem;line-height:1.25}.analytics-grid figure .chart-note{min-height:1.2em;margin-bottom:4px}.analytics-grid .chart{height:145px;min-height:145px;padding:8px 2px 0;gap:4px}.analytics-grid .bar-wrap{min-width:18px}.analytics-grid .bar-value{font-size:.68rem;line-height:1.2;white-space:nowrap}.analytics-grid .bar-label{font-size:.66rem;line-height:1.2}.analytics-stat-grid{grid-template-columns:minmax(0,1fr);margin:0 0 10px}.analytics-stat-grid .metric{min-width:0;min-height:88px;padding:12px;display:flex;flex-direction:column;justify-content:center}.analytics-stat-grid .metric-label{font-size:.75rem;line-height:1.3;letter-spacing:.04em}.analytics-stat-grid .metric strong{font-size:1.7rem;margin-top:5px;line-height:1.1}.compare-bar-group{grid-template-columns:minmax(62px,90px) minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:center}.compare-bar-group>strong{overflow-wrap:anywhere;font-size:.82rem}.compare-controls{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));align-items:end}.compare-controls select{width:100%;min-width:0}.editor-row{display:block}.editor-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px;align-items:end}.editor-controls>label,.compare-controls>label{min-width:0}.editor-toppings{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:6px;margin-top:10px}.editor-toppings label{display:flex;align-items:center;gap:7px;font-weight:500}.editor-toppings input{width:1rem;height:1rem}#business-summary{grid-template-columns:repeat(6,minmax(0,1fr))}.employee-detail{margin-top:14px}.employee-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}@media(max-width:920px){#business-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:620px){header{padding:15px 18px}main{padding:22px 14px 44px}.tab{padding:10px 9px;font-size:.92rem}.order-card,.chart-box{padding:14px}.analytics-grid{grid-template-columns:minmax(0,1fr)}.analytics-grid .chart{height:170px;min-height:170px}.compare-bar-group{grid-template-columns:minmax(54px,70px) minmax(0,1fr) minmax(0,1fr);gap:6px}#business-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.toolbar{align-items:start}}
     .menu-add-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;align-items:end;margin:18px 0 12px}.menu-add-form label,.dialog-inner>label{display:grid;gap:6px;font-weight:650}.menu-add-form input,.menu-add-form select,.dialog-inner input{width:100%;min-width:0}.menu-add-form button{min-height:42px}.performance-low{background:#bd463d!important}.performance-mid{background:#d0a22d!important}.performance-high{background:#4e8c5b!important}.bar{transform:scaleY(0);transform-origin:bottom;animation:bar-rise .7s cubic-bezier(.2,.7,.2,1) calc(var(--bar-index,0)*35ms) forwards}.compare-fill{transform:scaleX(0);transform-origin:left;animation:compare-rise .65s cubic-bezier(.2,.7,.2,1) calc(var(--bar-index,0)*25ms) forwards}@keyframes bar-rise{to{transform:scaleY(1)}}@keyframes compare-rise{to{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.bar,.compare-fill{animation:none;transform:none}}
   </style>
+  <style>
+    .menu-description-field{grid-column:1/-1}.menu-add-form textarea,.dialog-inner textarea{width:100%;min-height:90px;resize:vertical}.menu-description{max-width:320px;white-space:pre-wrap;overflow-wrap:anywhere}.menu-actions{display:flex;gap:8px;flex-wrap:wrap}.menu-actions .btn{min-height:44px}.menu-filter{display:flex;align-items:center;gap:9px;min-height:44px}.menu-filter input{width:20px;height:20px}button:disabled{cursor:not-allowed}.dialog-inner>label{margin-top:12px}.menu-confirmation-phrase{overflow-wrap:anywhere}.menu-delete-item{font-weight:700}
+  </style>
 </head>
 <body>
   <header><a href="/admin/accounts">Manage accounts</a><a href="/account">Account settings</a><div><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
@@ -22,7 +25,7 @@
       <button class="tab" role="tab" id="tab-current" aria-controls="panel-current" aria-selected="true" tabindex="0" data-panel="current">Current Orders</button>
       <button class="tab" role="tab" id="tab-past" aria-controls="panel-past" aria-selected="false" tabindex="-1" data-panel="past">Past Orders</button>
       <button class="tab" role="tab" id="tab-customers" aria-controls="panel-customers" aria-selected="false" tabindex="-1" data-panel="customers">Customers</button>
-      <button class="tab" role="tab" id="tab-menu" aria-controls="panel-menu" aria-selected="false" tabindex="-1" data-panel="menu">Menu</button>
+      <button class="tab" role="tab" id="tab-menu" aria-controls="panel-menu" aria-selected="false" tabindex="-1" data-panel="menu">Edit Menu</button>
     </div>
     <div class="tabs" id="analytics-tabs" role="tablist" aria-label="Analytics categories" hidden>
       <button class="tab" role="tab" id="tab-ordering" aria-controls="panel-ordering" aria-selected="true" tabindex="0" data-panel="ordering">Ordering Analytics</button>
@@ -61,15 +64,17 @@
       <div class="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Orders</th><th scope="col">Order value</th><th scope="col">Last order</th></tr></thead><tbody id="customers"></tbody></table></div>
     </section>
     <section class="panel" role="tabpanel" id="panel-menu" aria-labelledby="tab-menu" tabindex="0" hidden>
-      <div class="toolbar"><div><h2>Menu and pricing</h2><p>Add menu choices or edit an item name and price. Changes apply to new orders.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
-      <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<select id="new-menu-category" required><option value="pizza">Pizza size</option><option value="topping">Topping</option><option value="side">Side</option><option value="drink_name">Drink</option><option value="drink">Drink size</option></select></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0" max="10000" step="0.01" inputmode="decimal" required></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
+      <div class="toolbar"><div><h2>Menu and pricing</h2><p>Add or edit menu items. Removed items disappear from the customer menu; past orders stay unchanged.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
+      <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<select id="new-menu-category" required><option value="pizza">Pizza size</option><option value="topping">Topping</option><option value="side">Side</option><option value="drink_name">Drink</option><option value="drink">Drink size</option></select></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><label class="menu-description-field" for="new-menu-description">Description (optional)<textarea id="new-menu-description" maxlength="1000" rows="3"></textarea></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
       <p class="hint">Drink names can have an optional price adjustment. Drink size prices apply to every drink.</p>
       <p class="sr-status" id="menu-message" role="status" aria-live="polite"></p>
-      <div class="table-scroll"><table><caption class="sr-only">Current menu items and prices</caption><thead><tr><th scope="col">Type</th><th scope="col">Item</th><th scope="col">Price</th><th scope="col">Action</th></tr></thead><tbody id="menu-rows"></tbody></table></div>
+      <label class="menu-filter" for="show-removed-menu"><input id="show-removed-menu" type="checkbox">Show removed items</label>
+      <div class="table-scroll" id="menu-table-scroll" tabindex="0" role="region" aria-label="Menu items"><table><caption class="sr-only">Menu items, descriptions, prices and availability</caption><thead><tr><th scope="col">Type</th><th scope="col">Item</th><th scope="col">Description</th><th scope="col">Price</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody id="menu-rows"></tbody></table></div>
     </section>
   </main>
   <dialog id="edit-dialog" aria-labelledby="edit-title" aria-describedby="edit-help"><form method="dialog" class="dialog-inner" id="edit-form"><h2 id="edit-title">Edit order</h2><p id="edit-help" class="hint">Customize each pizza, side, and drink. The total updates as you make changes.</p><div id="edit-items-editor"></div><button class="btn" type="button" id="add-edit-item">＋ Add item</button><div class="editor-preview" id="edit-preview" aria-live="polite"></div><p class="sr-status" id="edit-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" type="button" id="cancel-edit">Cancel</button><button class="btn btn-primary" type="submit" id="save-edit">Save order changes</button></div></form></dialog>
-  <dialog id="menu-edit-dialog" aria-labelledby="menu-edit-title"><form class="dialog-inner" id="menu-edit-form"><h2 id="menu-edit-title">Edit menu item</h2><p class="hint" id="menu-edit-kind"></p><label for="edit-menu-name">Item name<input id="edit-menu-name" maxlength="60" required></label><label for="edit-menu-price">Price (dollars)<input id="edit-menu-price" type="number" min="0" max="10000" step="0.01" inputmode="decimal" required></label><p class="sr-status" id="menu-edit-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" type="button" id="cancel-menu-edit">Cancel</button><button class="btn btn-primary" type="submit" id="save-menu-edit">Save changes</button></div></form></dialog>
+  <dialog id="menu-edit-dialog" aria-labelledby="menu-edit-title" aria-modal="true"><form class="dialog-inner" id="menu-edit-form"><h2 id="menu-edit-title">Edit menu item</h2><p class="hint" id="menu-edit-kind"></p><label for="edit-menu-name">Item name<input id="edit-menu-name" maxlength="60" required></label><label for="edit-menu-description">Description (optional)<textarea id="edit-menu-description" maxlength="1000" rows="3"></textarea></label><label for="edit-menu-price">Price (dollars)<input id="edit-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><p class="sr-status" id="menu-edit-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" type="button" id="cancel-menu-edit">Cancel</button><button class="btn btn-primary" type="submit" id="save-menu-edit">Save changes</button></div></form></dialog>
+  <dialog id="menu-delete-dialog" aria-labelledby="menu-delete-title" aria-describedby="menu-delete-warning" aria-modal="true"><form class="dialog-inner" id="menu-delete-form"><h2 id="menu-delete-title">Delete menu item</h2><p class="menu-delete-item" id="menu-delete-item"></p><p id="menu-delete-warning">Are you certain you want to delete this item? The item will be removed from the menu.</p><div id="menu-delete-first-step" class="dialog-actions"><button class="btn" id="cancel-menu-delete-first" type="button" autofocus>Cancel</button><button class="btn btn-primary" id="confirm-menu-delete-yes" type="button">Yes</button></div><div id="menu-delete-second-step" hidden><p id="menu-delete-phrase-help">Type exactly: <strong class="menu-confirmation-phrase" id="menu-delete-phrase"></strong></p><label for="menu-delete-confirmation">Confirmation phrase<input id="menu-delete-confirmation" maxlength="100" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="menu-delete-phrase-help menu-delete-message" required disabled></label><p id="menu-delete-message" class="sr-status" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="btn" id="cancel-menu-delete-final" type="button">Cancel</button><button class="btn btn-primary" id="submit-menu-delete" type="submit" disabled>Delete item</button></div></div></form></dialog>
   <script type="module">
     import {createDemoAdminState,handleDemoAdminRequest} from '/admin-demo.js';
     const $ = strId => document.getElementById(strId);
@@ -288,12 +293,134 @@
     $('search').addEventListener('submit',objEvent=>{objEvent.preventDefault();loadCustomers();});
 
     const objMenuLabels={pizza:'Pizza size',topping:'Topping',side:'Side',drink:'Drink size',drink_name:'Drink'};
-    let objEditingMenuItem=null;
-    async function loadMenu(){try{const arrRows=await api('/api/admin/menu'),objBody=$('menu-rows');objBody.replaceChildren();for(const objRow of arrRows){const objTr=document.createElement('tr');for(const strText of [objMenuLabels[objRow.category]||objRow.category,objRow.name,money(objRow.price_cents)])objTr.append(textElement('td',strText));const objAction=textElement('button','Edit','btn btn-small');objAction.type='button';objAction.addEventListener('click',()=>{objEditingMenuItem=objRow;$('menu-edit-title').textContent=`Edit ${objMenuLabels[objRow.category].toLowerCase()}`;$('menu-edit-kind').textContent=`Current type: ${objMenuLabels[objRow.category]}`;$('edit-menu-name').value=objRow.name;$('edit-menu-price').value=(objRow.price_cents/100).toFixed(2);$('menu-edit-message').textContent='';$('menu-edit-dialog').showModal();$('edit-menu-name').focus();});const objTd=document.createElement('td');objTd.append(objAction);objTr.append(objTd);objBody.append(objTr);}if(!arrRows.length){const objTr=document.createElement('tr'),objTd=textElement('td','No menu items yet.');objTd.colSpan=4;objTr.append(objTd);objBody.append(objTr);}$('menu-message').textContent=`${arrRows.length} menu items loaded.`;}catch(error){$('menu-message').textContent=error.message;announce(error.message,true);}}
+    let objEditingMenuItem=null,objDeletingMenuItem=null,objMenuEditTrigger=null,objMenuDeleteTrigger=null;
+    let arrMenuRows=[],bMenuEditBusy=false,bMenuDeleteBusy=false,bMenuDeleteConfirmed=false;
+    const mapMenuEditButtons=new Map();
+    const menuItemPath=objItem=>`/api/admin/menu/${objItem.category}/${encodeURIComponent(objItem.name)}`;
+    const menuItemActive=objItem=>Number(objItem.is_active??1)===1;
+
+    function renderMenu(){
+      const objBody=$('menu-rows');objBody.replaceChildren();mapMenuEditButtons.clear();
+      const arrVisible=arrMenuRows.filter(objItem=>$('show-removed-menu').checked||menuItemActive(objItem));
+      for(const objItem of arrVisible){
+        const objRow=document.createElement('tr'),bActive=menuItemActive(objItem);
+        const strType=objMenuLabels[objItem.category]||objItem.category;
+        objRow.append(textElement('td',strType),textElement('td',objItem.name),textElement('td',objItem.description||'—','menu-description'),textElement('td',money(objItem.price_cents)),textElement('td',bActive?'Active':'Removed'));
+        const objActions=document.createElement('td');
+        if(bActive){
+          const objGroup=document.createElement('div');objGroup.className='menu-actions';
+          const objEdit=textElement('button','Edit','btn btn-small');objEdit.type='button';objEdit.setAttribute('aria-label',`Edit ${objItem.name} (${strType})`);
+          objEdit.addEventListener('click',()=>openMenuEdit(objItem,objEdit));
+          mapMenuEditButtons.set(`${objItem.category}:${objItem.name}`,objEdit);
+          const objDelete=textElement('button','Delete','btn btn-small');objDelete.type='button';objDelete.setAttribute('aria-label',`Delete ${objItem.name} (${strType})`);
+          objDelete.addEventListener('click',()=>openMenuDelete(objItem,objDelete));
+          objGroup.append(objEdit,objDelete);objActions.append(objGroup);
+        }else objActions.textContent='Removed from the customer menu';
+        objRow.append(objActions);objBody.append(objRow);
+      }
+      if(!arrVisible.length){const objRow=document.createElement('tr'),objCell=textElement('td','No menu items to show.');objCell.colSpan=6;objRow.append(objCell);objBody.append(objRow);}
+      const nActive=arrMenuRows.filter(menuItemActive).length;
+      $('menu-message').textContent=`${nActive} active items; ${arrMenuRows.length-nActive} removed.`;
+    }
+    async function loadMenu(){
+      $('refresh-menu').disabled=true;
+      try{arrMenuRows=await api('/api/admin/menu');renderMenu();return true;}
+      catch(objError){$('menu-message').textContent=objError.message;announce(objError.message,true);return false;}
+      finally{$('refresh-menu').disabled=false;}
+    }
+    async function refreshMenuAfterChange(strMessage){
+      const bReloaded=await loadMenu();await buildMenuChoices();
+      $('menu-message').textContent=strMessage+(bReloaded?'':' Refresh the menu to reload current items.');
+      announce($('menu-message').textContent);
+    }
     $('refresh-menu').addEventListener('click',loadMenu);
-    $('add-menu-form').addEventListener('submit',async objEvent=>{objEvent.preventDefault();const objButton=$('add-menu-item');objButton.disabled=true;$('menu-message').textContent='';try{await api('/api/admin/menu',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:$('new-menu-category').value,name:$('new-menu-name').value,priceCents:Math.round(Number($('new-menu-price').value)*100)})});$('new-menu-name').value='';$('new-menu-price').value='';await loadMenu();await buildMenuChoices();$('menu-message').textContent='Menu item added.';}catch(error){$('menu-message').textContent=error.message;}finally{objButton.disabled=false;}});
+    $('show-removed-menu').addEventListener('change',renderMenu);
+    $('new-menu-category').addEventListener('change',()=>{$('new-menu-price').min=$('new-menu-category').value==='drink_name'?'0':'0.01';});
+    $('add-menu-form').addEventListener('submit',async objEvent=>{
+      objEvent.preventDefault();const objButton=$('add-menu-item');
+      if(objButton.disabled||!$('add-menu-form').reportValidity())return;
+      objButton.disabled=true;$('menu-message').textContent='';
+      try{
+        await api('/api/admin/menu',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:$('new-menu-category').value,name:$('new-menu-name').value,description:$('new-menu-description').value,priceCents:Math.round(Number($('new-menu-price').value)*100)})});
+        $('new-menu-name').value='';$('new-menu-description').value='';$('new-menu-price').value='';
+        await refreshMenuAfterChange('Menu item added.');$('new-menu-name').focus();
+      }catch(objError){$('menu-message').textContent=objError.message;}
+      finally{objButton.disabled=false;}
+    });
+
+    function openMenuEdit(objItem,objTrigger){
+      objEditingMenuItem={...objItem};objMenuEditTrigger=objTrigger;
+      $('menu-edit-title').textContent=`Edit ${objMenuLabels[objItem.category].toLowerCase()}`;
+      $('menu-edit-kind').textContent=`Current type: ${objMenuLabels[objItem.category]}`;
+      $('edit-menu-name').value=objItem.name;$('edit-menu-description').value=objItem.description||'';
+      $('edit-menu-price').value=(objItem.price_cents/100).toFixed(2);$('edit-menu-price').min=objItem.category==='drink_name'?'0':'0.01';
+      $('menu-edit-message').textContent='';$('menu-edit-dialog').showModal();$('edit-menu-name').focus();
+    }
     $('cancel-menu-edit').addEventListener('click',()=>$('menu-edit-dialog').close());
-    $('menu-edit-form').addEventListener('submit',async objEvent=>{objEvent.preventDefault();if(!objEditingMenuItem)return;$('save-menu-edit').disabled=true;$('menu-edit-message').textContent='';try{await api(`/api/admin/menu/${objEditingMenuItem.category}/${encodeURIComponent(objEditingMenuItem.name)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('edit-menu-name').value,priceCents:Math.round(Number($('edit-menu-price').value)*100)})});$('menu-edit-dialog').close();await loadMenu();await buildMenuChoices();}catch(error){$('menu-edit-message').textContent=error.message;}finally{$('save-menu-edit').disabled=false;}});
+    $('menu-edit-dialog').addEventListener('cancel',objEvent=>{if(bMenuEditBusy)objEvent.preventDefault();});
+    $('menu-edit-dialog').addEventListener('close',()=>{objEditingMenuItem=null;(objMenuEditTrigger?.isConnected?objMenuEditTrigger:$('refresh-menu')).focus();});
+    $('menu-edit-form').addEventListener('submit',async objEvent=>{
+      objEvent.preventDefault();if(!objEditingMenuItem||bMenuEditBusy||!$('menu-edit-form').reportValidity())return;
+      const objItem=objEditingMenuItem;bMenuEditBusy=true;$('save-menu-edit').disabled=true;$('cancel-menu-edit').disabled=true;$('menu-edit-message').textContent='';
+      try{
+        const objSaved=await api(menuItemPath(objItem),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('edit-menu-name').value,description:$('edit-menu-description').value,priceCents:Math.round(Number($('edit-menu-price').value)*100)})});
+        $('menu-edit-dialog').close();await refreshMenuAfterChange('Menu item updated.');
+        (mapMenuEditButtons.get(`${objItem.category}:${objSaved.name}`)||$('refresh-menu')).focus();
+      }catch(objError){$('menu-edit-message').textContent=objError.message;}
+      finally{bMenuEditBusy=false;$('save-menu-edit').disabled=false;$('cancel-menu-edit').disabled=false;}
+    });
+
+    function openMenuDelete(objItem,objTrigger){
+      objDeletingMenuItem={...objItem};objMenuDeleteTrigger=objTrigger;bMenuDeleteConfirmed=false;
+      $('menu-delete-item').textContent=`${objItem.name} · ${objMenuLabels[objItem.category]}`;
+      $('menu-delete-phrase').textContent=`DELETE ${objItem.name}`;
+      $('menu-delete-confirmation').value='';$('menu-delete-confirmation').disabled=true;
+      $('menu-delete-confirmation').setCustomValidity('');$('menu-delete-confirmation').removeAttribute('aria-invalid');
+      $('menu-delete-message').textContent='';$('menu-delete-first-step').hidden=false;$('menu-delete-second-step').hidden=true;
+      $('submit-menu-delete').disabled=true;$('menu-delete-dialog').showModal();$('cancel-menu-delete-first').focus();
+    }
+    function updateMenuDeleteConfirmation(){
+      const bMatches=bMenuDeleteConfirmed&&objDeletingMenuItem&&$('menu-delete-confirmation').value===`DELETE ${objDeletingMenuItem.name}`;
+      $('submit-menu-delete').disabled=bMenuDeleteBusy||!bMatches;
+      $('menu-delete-confirmation').setCustomValidity(bMatches?'':'Type the confirmation phrase exactly.');
+      $('menu-delete-confirmation').setAttribute('aria-invalid',String(!bMatches));
+    }
+    $('confirm-menu-delete-yes').addEventListener('click',()=>{
+      if(!objDeletingMenuItem||bMenuDeleteBusy)return;bMenuDeleteConfirmed=true;
+      $('menu-delete-first-step').hidden=true;$('menu-delete-second-step').hidden=false;
+      $('menu-delete-confirmation').disabled=false;updateMenuDeleteConfirmation();$('menu-delete-confirmation').focus();
+    });
+    $('menu-delete-confirmation').addEventListener('input',()=>{updateMenuDeleteConfirmation();$('menu-delete-message').textContent='';});
+    for(const strId of ['cancel-menu-delete-first','cancel-menu-delete-final'])$(strId).addEventListener('click',()=>{if(!bMenuDeleteBusy)$('menu-delete-dialog').close();});
+    $('menu-delete-dialog').addEventListener('cancel',objEvent=>{if(bMenuDeleteBusy)objEvent.preventDefault();});
+    $('menu-delete-dialog').addEventListener('keydown',objEvent=>{
+      if(objEvent.key!=='Tab')return;
+      const arrControls=[...$('menu-delete-dialog').querySelectorAll('button:not(:disabled),input:not(:disabled)')].filter(objControl=>objControl.getClientRects().length);
+      const objFirst=arrControls[0],objLast=arrControls.at(-1);
+      // Explicit wrapping also keeps focus inside the modal in browser chrome navigation.
+      if(!objFirst){objEvent.preventDefault();return;}
+      if(objEvent.shiftKey&&document.activeElement===objFirst){objEvent.preventDefault();objLast.focus();}
+      else if(!objEvent.shiftKey&&document.activeElement===objLast){objEvent.preventDefault();objFirst.focus();}
+    });
+    $('menu-delete-dialog').addEventListener('close',()=>{
+      objDeletingMenuItem=null;bMenuDeleteConfirmed=false;$('menu-delete-confirmation').value='';$('menu-delete-confirmation').disabled=true;$('submit-menu-delete').disabled=true;
+      (objMenuDeleteTrigger?.isConnected?objMenuDeleteTrigger:$('refresh-menu')).focus();
+    });
+    $('menu-delete-form').addEventListener('submit',async objEvent=>{
+      objEvent.preventDefault();
+      if(!objDeletingMenuItem||!bMenuDeleteConfirmed||bMenuDeleteBusy||$('menu-delete-confirmation').value!==`DELETE ${objDeletingMenuItem.name}`)return;
+      const objItem=objDeletingMenuItem,strConfirmation=$('menu-delete-confirmation').value;
+      bMenuDeleteBusy=true;$('submit-menu-delete').disabled=true;$('menu-delete-confirmation').disabled=true;$('cancel-menu-delete-final').disabled=true;
+      $('menu-delete-form').setAttribute('aria-busy','true');$('menu-delete-message').textContent='Removing item…';
+      try{
+        await api(menuItemPath(objItem),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:strConfirmation})});
+        $('menu-delete-dialog').close();await refreshMenuAfterChange(`${objItem.name} removed from the menu. Past orders are unchanged.`);$('refresh-menu').focus();
+      }catch(objError){$('menu-delete-message').textContent=objError.message;$('menu-delete-confirmation').disabled=false;$('menu-delete-confirmation').focus();}
+      finally{
+        bMenuDeleteBusy=false;$('cancel-menu-delete-final').disabled=false;$('menu-delete-form').removeAttribute('aria-busy');
+        if($('menu-delete-dialog').open)updateMenuDeleteConfirmation();
+      }
+    });
 
     function renderChart(objData,strTargetId) {
       const objContent=$(strTargetId);objContent.replaceChildren();

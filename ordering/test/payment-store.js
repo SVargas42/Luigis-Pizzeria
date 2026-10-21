@@ -3,9 +3,10 @@ export function paymentStore(){
  let objState={payments:[],customers:[],orders:[],items:[],events:new Map(),refunds:new Map(),mail:[],reservations:new Map()};
  let prLock=Promise.resolve();const mapMenu=new Map([['pizza:Small',1000],['pizza:Medium',1300],['pizza:Large',1600],['topping:Cheese',150],['side:Breadsticks',500],['side:Pizza Bites',600],['drink:Small',200],['drink:Medium',275],['drink:Large',350],['drink_name:Coke',0],['drink_name:Pepsi',0],['drink_name:Dr Pepper',0],['drink_name:Water',0]]);
  const objFlags={failItems:false};
+ const setInactiveMenu=new Set();
  const copy=objValue=>structuredClone(objValue);
  async function query(strSql,arrValues=[]){
-  if(strSql.startsWith('SELECT category'))return [...mapMenu].map(([strKey,nValue])=>({category:strKey.split(':')[0],name:strKey.split(':')[1],price_cents:nValue}));
+  if(strSql.startsWith('SELECT category'))return [...mapMenu].filter(([strKey])=>!strSql.includes('WHERE is_active = 1')||!setInactiveMenu.has(strKey)).map(([strKey,nValue])=>({category:strKey.split(':')[0],name:strKey.split(':')[1],price_cents:nValue}));
   if(strSql.startsWith('INSERT INTO checkout_reservations')){if(!objState.reservations.has(arrValues[0]))objState.reservations.set(arrValues[0],{channel:arrValues[1],account_id:arrValues[2]});return {};}
   if(strSql.startsWith('SELECT channel,account_id FROM checkout_reservations'))return objState.reservations.has(arrValues[0])?[copy(objState.reservations.get(arrValues[0]))]:[];
   if(strSql.startsWith('SELECT payment_method FROM orders'))return copy(objState.orders.filter(objRow=>objRow.request_key===arrValues[0]).map(objRow=>({payment_method:objRow.payment_method})));
@@ -30,5 +31,5 @@ export function paymentStore(){
   throw Error('Unexpected payment test query: '+strSql);
  }
  const objPool={query,getConnection:async()=>{let objSaved,fnRelease,bOpen=false;return {query,async beginTransaction(){const prPrevious=prLock;prLock=new Promise(fnResolve=>{fnRelease=fnResolve});await prPrevious;objSaved=copy(objState);bOpen=true;},async commit(){bOpen=false;fnRelease();},async rollback(){if(bOpen){objState=objSaved;bOpen=false;fnRelease();}},release(){if(bOpen)throw Error('Transaction not closed');}}}};
- return {pool:objPool,mapMenu,flags:objFlags,get state(){return objState}};
+ return {pool:objPool,mapMenu,setInactiveMenu,flags:objFlags,get state(){return objState}};
 }

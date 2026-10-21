@@ -14,6 +14,21 @@ function harness(){
  async function event(strType,objObject,objOverrides={}){const strPayload=JSON.stringify({id:'evt_'+randomUUID(),type:strType,livemode:false,data:{object:objObject},...objOverrides});const strSignature=objStripeSdk.webhooks.generateTestHeaderString({payload:strPayload,secret:'whsec_unit_secret'});return objService.webhook(Buffer.from(strPayload),strSignature);}
  return {objStore,objService,objInput,objStripe,mapSessions,paid,event,setRefunded(nValue){nRefunded=nValue},get calls(){return nCalls}};
 }
+test('inactive menu choices cannot create Stripe sessions',async()=>{
+ for(const strKey of ['pizza:Small','topping:Cheese']){
+  const objHarness=harness();objHarness.objStore.setInactiveMenu.add(strKey);
+  await assert.rejects(()=>objHarness.objService.createCheckout(objHarness.objInput,null));
+  assert.equal(objHarness.calls,0);assert.equal(objHarness.objStore.state.orders.length,0);
+ }
+});
+test('deactivating a menu item preserves an already quoted paid checkout',async()=>{
+ const objHarness=harness();await objHarness.objService.createCheckout(objHarness.objInput,null);
+ objHarness.objStore.setInactiveMenu.add('topping:Cheese');
+ await objHarness.event('checkout.session.completed',objHarness.paid());
+ assert.equal(objHarness.objStore.state.orders.length,1);
+ assert.equal(objHarness.objStore.state.items[0].description,'Small pizza with Cheese');
+ assert.equal(objHarness.objStore.state.items[0].unit,1150);
+});
 test('server quote ignores client totals, validates contact and freezes tax with prices',()=>{
  const objHarness=harness(),objCanonical=canonicalCheckout(objHarness.objInput,null),objQuote=makeQuote(objCanonical,objHarness.objStore.mapMenu,825);assert.equal(objQuote.subtotalCents,1150);assert.equal(objQuote.taxCents,95);assert.equal(objQuote.totalCents,1245);
  assert.throws(()=>makeQuote(objCanonical,objHarness.objStore.mapMenu,-1));assert.throws(()=>canonicalCheckout({...objHarness.objInput,customer:{...objHarness.objInput.customer,phone:''}},null));assert.throws(()=>canonicalCheckout({...objHarness.objInput,checkoutToken:'bad'},null));
