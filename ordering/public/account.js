@@ -28,13 +28,21 @@ async function init(){
   const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
   $('profile-fields').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
   $('email-field').hidden=!bEmail;$('email').required=bEmail;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
+  $('confirm-password-field').hidden = strMode !== 'register';
+  $('confirmPassword').required = strMode === 'register';
   $('current-field').hidden=strMode!=='password';$('currentPassword').required=strMode==='password';
   $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Email changes require restaurant support.':'Use the email address associated with your account.';
   if(strMode==='profile')for(const strId of ['firstName','lastName','phone'])$(strId).value=strId==='phone'?normalizePhone(objSession.user.phone):objSession.user[strId];
  }catch(objError){announce(objError.message);}
 }
 $('account-form').onsubmit=async objEvent=>{
- objEvent.preventDefault();if(!$('account-form').reportValidity())return;$('submit').disabled=true;
+ objEvent.preventDefault();
+ if (strMode === 'register' && $('password').value !== $('confirmPassword').value) {
+  showRegistrationAlert('Passwords do not match.', false);
+  $('register-alert').textContent = 'Passwords do not match.';
+  return;
+ }
+ if(!$('account-form').reportValidity())return;$('submit').disabled=true;
  try{
   const objInput={email:$('email').value,firstName:$('firstName').value,lastName:$('lastName').value,phone:$('phone').value,password:$('password').value,currentPassword:$('currentPassword').value,token:strToken};
   const strEndpoint={register:'register',login:'login',forgot:'forgot',resend:'resend',reset:'reset',invite:'accept-invite',profile:'profile',password:'password'}[strMode];
@@ -55,6 +63,7 @@ $('account-form').onsubmit=async objEvent=>{
     );
     if (bSuccess) {
       $('password').value = '';
+      $('confirmPassword').value = '';
       $('account-form').hidden = true;
     }
     return;
