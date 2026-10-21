@@ -28,6 +28,10 @@ function createHarness(bFail=false) {
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
+test('guest details place email before the optional phone field',()=>{
+ const nEmailPosition=strHtml.indexOf('for="email"'),nPhonePosition=strHtml.indexOf('for="phone"');
+ assert.ok(nEmailPosition>=0&&nPhonePosition>nEmailPosition);
+});
 test('customer places pickup order and sees an itemized receipt and tracker',async()=>{
  const objHarness=createHarness();
  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','1234567890']])objHarness.mapElements.get(strId).value=strValue;
