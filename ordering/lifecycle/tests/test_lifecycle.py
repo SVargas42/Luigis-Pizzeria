@@ -50,6 +50,7 @@ def objHarness(monkeypatch):
         CREATE TABLE orders(id INTEGER PRIMARY KEY,request_key TEXT UNIQUE,customer_id INTEGER REFERENCES customers(id),customer_name TEXT,customer_email TEXT,customer_phone TEXT,total_cents INTEGER,payment_method TEXT,tracking_token TEXT UNIQUE,tracking_status TEXT,payment_status TEXT,subtotal_cents INTEGER,tax_cents INTEGER,estimated_pickup_time timestamp,status TEXT DEFAULT 'received',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE order_items(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),kind TEXT,description TEXT,quantity INTEGER,unit_price_cents INTEGER,size TEXT);
         CREATE TABLE order_events(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),actor_email TEXT,event_type TEXT,from_status TEXT,to_status TEXT,details TEXT);
+        CREATE TABLE account_mail(id TEXT PRIMARY KEY,recipient TEXT,subject TEXT,message TEXT,purpose TEXT);
         CREATE TABLE menu_prices(category TEXT,name TEXT,price_cents INTEGER,description TEXT DEFAULT '',is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name));
         INSERT INTO menu_prices(category,name,price_cents) VALUES('pizza','Small',1000),('topping','Cheese',150),('side','Breadsticks',500),('drink','Small',200),('drink_name','Water',0);
         CREATE TABLE menu_variations(category TEXT,name TEXT,size TEXT,price_cents INTEGER,is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name,size),FOREIGN KEY(category,name) REFERENCES menu_prices(category,name) ON UPDATE CASCADE ON DELETE RESTRICT);
@@ -65,7 +66,7 @@ def objHarness(monkeypatch):
             raise
     arrMail = []
     monkeypatch.setattr(objModule, 'database', test_database)
-    monkeypatch.setattr(objModule, 'dispatch_receipt', arrMail.append)
+
     with TestClient(objModule.app) as objClient:
         yield objClient, objConnection, arrMail
     objConnection.close()
@@ -87,7 +88,7 @@ def test_checkout_retry_receipt_tracker_and_mail(objHarness):
     assert len(objReceipt['trackerUrl'].split('token=')[1]) == 64
     assert objClient.post('/api/orders', json=objPayload).json() == objReceipt
     assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 1
-    assert len(arrMail) == 1
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
     objTrack = objClient.get('/api/orders/' + objReceipt['trackerUrl'].split('token=')[1] + '/track')
     assert objTrack.status_code == 200
     assert objTrack.json()['status'] == 'order_received'
@@ -120,7 +121,7 @@ def test_inactive_menu_choices_reject_new_orders_but_preserve_receipts(objHarnes
     assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 1
     assert objConnection.execute('SELECT * FROM order_items').fetchall() == arrOriginalItems
     assert objClient.post('/api/orders', json=objPayload).json() == objOriginal.json()
-    assert len(arrMail) == 1
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
 
 
 @pytest.mark.parametrize('strField,objValue', [('phone',''),('phone','-------'),('email','bad'),('firstName',' ')])
@@ -141,7 +142,7 @@ def test_invalid_menu_and_failed_item_insert_roll_back(objHarness):
         objClient.post('/api/orders', json=payload())
     for strTable in ('customers', 'orders', 'order_items', 'order_events'):
         assert objConnection.execute('SELECT COUNT(*) FROM ' + strTable).fetchone()[0] == 0
-    assert not arrMail
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 0
 
 
 def test_staff_auth_estimate_sequential_stale_and_archive(objHarness):
@@ -158,6 +159,7 @@ def test_staff_auth_estimate_sequential_stale_and_archive(objHarness):
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':'2020-01-01T00:00:00Z'}).status_code == 422
     strEstimate = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 200
+    assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 200
     for nIndex in range(4):
         objChange = {'expectedStatus':objModule.arrStages[nIndex], 'status':objModule.arrStages[nIndex+1]}
         assert objClient.patch(strBase + '/status', json=objChange).status_code == 200
@@ -167,6 +169,31 @@ def test_staff_auth_estimate_sequential_stale_and_archive(objHarness):
     assert objClient.get('/api/employee/orders/active').json() == []
     assert objHarness[1].execute("SELECT COUNT(*) FROM order_events WHERE actor_email='owner@example.com'").fetchone()[0] == 5
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 409
+    arrMessages = objHarness[1].execute('SELECT recipient,subject,message,purpose FROM account_mail').fetchall()
+    assert len(arrMessages) == 7  # receipt, changed estimate, four stages, completion
+    assert all(objMail['recipient'] == objReceipt['customer']['email'] for objMail in arrMessages)
+    assert all(objMail['purpose'] == 'receipt' and objReceipt['trackerUrl'] in objMail['message'] for objMail in arrMessages)
+    assert any('ready for pickup' in objMail['subject'] for objMail in arrMessages)
+
+
+def test_order_and_notification_are_atomic(objHarness):
+    objClient, objConnection, _ = objHarness
+    objConnection.execute("CREATE TRIGGER reject_mail BEFORE INSERT ON account_mail BEGIN SELECT RAISE(ABORT,'forced queue failure'); END")
+    with pytest.raises(sqlite3.IntegrityError):
+        objClient.post('/api/orders', json=payload())
+    assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 0
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 0
+
+
+def test_status_and_notification_are_atomic(objHarness):
+    objClient, objConnection, _ = objHarness
+    objReceipt = objClient.post('/api/orders', json=payload()).json()
+    objConnection.execute("CREATE TRIGGER reject_mail BEFORE INSERT ON account_mail BEGIN SELECT RAISE(ABORT,'forced queue failure'); END")
+    objClient.auth = ('staff', 'test-password')
+    with pytest.raises(sqlite3.IntegrityError):
+        objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/status", json={'expectedStatus':'order_received','status':'order_confirmed'})
+    assert objConnection.execute('SELECT tracking_status FROM orders').fetchone()[0] == 'order_received'
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
 
 
 def test_origin_and_unconfigured_mail_do_not_log_customer_details(objHarness, monkeypatch, caplog):

@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
-from .email_service import dispatch_receipt
+from .order_mail import enqueue_receipt, enqueue_progress
 from .menu_queries import (
     strActiveMenuQuery, strAdminMenuQuery, strInsertMenuQuery,
     strUpdateMenuQuery, strDeleteMenuQuery, strLockMenuQuery,
@@ -351,6 +351,7 @@ def create_order_once(objPayload: Checkout, objTasks: BackgroundTasks):
             objCursor.execute("INSERT INTO order_events(order_id,event_type,to_status,details) VALUES(%s,'created','received','Lifecycle order_received')", (nOrderId,))
             objCursor.execute('SELECT * FROM orders WHERE id=%s', (nOrderId,))
             objReceipt = receipt(objCursor, objCursor.fetchone())
+            enqueue_receipt(objCursor, objReceipt)
     except pymysql.IntegrityError as objError:
         if objError.args[0] != 1062:
             raise
@@ -361,7 +362,6 @@ def create_order_once(objPayload: Checkout, objTasks: BackgroundTasks):
             if not objExisting or not objExisting['tracking_token']:
                 raise HTTPException(409, 'Retry key conflict') from objError
             return receipt(objCursor, objExisting)
-    objTasks.add_task(dispatch_receipt, objReceipt)
     return objReceipt
 
 
@@ -419,14 +419,17 @@ def advance_status(nOrderId: int, objChange: StatusChange, x_luigi_actor: str = 
         strLegacy = 'ready' if nIndex == 3 else 'preparing' if nIndex >= 1 else 'received'
         objCursor.execute('UPDATE orders SET tracking_status=%s,status=%s WHERE id=%s', (objChange.status, strLegacy, nOrderId))
         objCursor.execute("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(%s,%s,'status_changed',%s,%s,%s)", (nOrderId, x_luigi_actor[:254], objOrder['status'], strLegacy, objChange.status))
+        enqueue_progress(objCursor, objOrder, objChange.status)
     return {'status': objChange.status}
 
 
 @app.patch('/api/employee/orders/{nOrderId}/estimate', dependencies=[Depends(require_staff)])
 def set_estimate(nOrderId: int, objEstimate: Estimate):
     with database() as objCursor:
-        lock_order(objCursor, nOrderId)
-        objCursor.execute('UPDATE orders SET estimated_pickup_time=%s WHERE id=%s', (objEstimate.estimatedPickupTime, nOrderId))
+        objOrder = lock_order(objCursor, nOrderId)
+        if objOrder['estimated_pickup_time'] != objEstimate.estimatedPickupTime:
+            objCursor.execute('UPDATE orders SET estimated_pickup_time=%s WHERE id=%s', (objEstimate.estimatedPickupTime, nOrderId))
+            enqueue_progress(objCursor, objOrder, 'estimate', objEstimate.estimatedPickupTime.isoformat() + 'Z')
     return {'estimatedPickupTime': objEstimate.estimatedPickupTime.isoformat() + 'Z'}
 
 
@@ -438,6 +441,7 @@ def complete_order(nOrderId: int, objCompletion: Completion, x_luigi_actor: str 
             raise HTTPException(409, 'Only ready orders can be archived')
         objCursor.execute("UPDATE orders SET status='completed' WHERE id=%s", (nOrderId,))
         objCursor.execute("INSERT INTO order_events(order_id,actor_email,event_type,from_status,to_status,details) VALUES(%s,%s,'status_changed','ready','completed','Picked up and archived')", (nOrderId, x_luigi_actor[:254]))
+        enqueue_progress(objCursor, objOrder, 'completed')
     return {'status': 'completed'}
 
 
