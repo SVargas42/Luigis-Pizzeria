@@ -96,7 +96,7 @@
       objPanel.hidden=!bPageMatch;
       objPanel.classList.toggle('active',bPageMatch&&objPanel.id===(bAnalyticsPage?'panel-ordering':'panel-current'));
     }
-    const objStatusLabels = {order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Baking',cooking_order:'Baking',order_ready:'Order ready',received:'Order received',preparing:'In the oven',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
+    const objStatusLabels = {order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Preparing',cooking_order:'Cooking',order_ready:'Ready',received:'Order received',preparing:'In the oven',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
     const objNextStatuses = {order_received:['order_confirmed'],order_confirmed:['preparing_order'],preparing_order:['cooking_order'],cooking_order:['order_ready'],order_ready:['completed'],received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
     let bOrderUpdatesPaused=false;
     let nEditingOrderId = null;
@@ -184,7 +184,7 @@
       if(strBucket==='current'){
         const objActions=document.createElement('div');objActions.className='actions';
         for(const strStatus of objNextStatuses[strActiveStatus]||[]){
-          const objButton=textElement('button',strStatus==='completed'?'Mark picked up':strStatus==='preparing_order'?'Start baking':`Mark ${objStatusLabels[strStatus].toLowerCase()}`,'btn btn-primary btn-small'+(strStatus==='ready'?' btn-green':''));
+          const objButton=textElement('button',strStatus==='completed'?'Mark picked up':`Mark ${objStatusLabels[strStatus]}`,'btn btn-primary btn-small'+(strStatus==='ready'?' btn-green':''));
           objButton.type='button';objButton.addEventListener('click',()=>changeStatus(objOrder,objButton,strStatus));objActions.append(objButton);
         }
         if(!objOrder.tracking_status&&!['online','card'].includes(objOrder.payment_method)&&['received','preparing','ready'].includes(objOrder.status)){

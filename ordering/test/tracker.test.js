@@ -16,10 +16,15 @@ const settle=()=>new Promise(fnResolve=>setImmediate(fnResolve));
 test('tracker renders five stages, polls estimates and supports pause and manual refresh',async()=>{
  const objHarness=trackerHarness();await settle();
  assert.equal(objHarness.getElement('tracker-stages').children.length,5);
+ assert.deepEqual(objHarness.getElement('tracker-stages').children.slice(2).map(objStep=>objStep.textContent),['Preparing','Cooking','Ready']);
  assert.equal(objHarness.getElement('tracker-progress').attrs['aria-valuenow'],'1');
  assert.match(objHarness.getElement('tracker-estimate').textContent,/Awaiting/);
  objHarness.objOrder.status='cooking_order';objHarness.objOrder.estimatedPickupTime='2026-10-17T00:00:00Z';objHarness.poll();await settle();
  assert.equal(objHarness.getElement('tracker-progress').attrs['aria-valuenow'],'4');
+ assert.equal(objHarness.getElement('tracker-message').textContent,'Cooking');
+ assert.equal(objHarness.getElement('tracker-stages').children[3].textContent,'Cooking');
+ assert.equal(objHarness.getElement('tracker-stages').children[3].attrs['aria-current'],'step');
+ assert.equal(objHarness.getElement('tracker-fill').style.width,'80%');
  assert.match(objHarness.getElement('tracker-estimate').textContent,/Estimated pickup/);
  objHarness.getElement('tracker-pause').handlers.click();objHarness.poll();await settle();assert.equal(objHarness.nRequests,2);
  await objHarness.getElement('tracker-refresh').handlers.click();assert.equal(objHarness.nRequests,3);

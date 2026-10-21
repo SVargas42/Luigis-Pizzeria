@@ -48,8 +48,18 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
  objActions.children[0].handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
  assert.equal(arrRequests[1].strPath,'/api/employee/orders/7/status');
  assert.deepEqual(JSON.parse(arrRequests[1].body),{status:'order_confirmed',expectedStatus:'order_received'});
+ objContext.objCurrentOrder=objOrder;
+ for(const [strCurrent,strNext,strLabel] of [['order_confirmed','preparing_order','Mark Preparing'],['preparing_order','cooking_order','Mark Cooking'],['cooking_order','order_ready','Mark Ready']]){
+  objOrder.tracking_status=strCurrent;
+  const objStageCard=vm.runInContext("renderOrder(objCurrentOrder,'current')",objContext);
+  const objButton=objStageCard.children.at(-1).children[0];
+  assert.equal(objButton.textContent,strLabel);
+  objButton.handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
+  assert.equal(arrRequests.at(-1).strPath,'/api/employee/orders/7/status');
+  assert.deepEqual(JSON.parse(arrRequests.at(-1).body),{status:strNext,expectedStatus:strCurrent});
+ }
  objOrder.status='ready';objOrder.tracking_status='order_ready';objContext.objReadyOrder=objOrder;
  const objReadyCard=vm.runInContext("renderOrder(objReadyOrder,'current')",objContext);
  objReadyCard.children.at(-1).children[0].handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
- assert.equal(arrRequests[2].strPath,'/api/employee/orders/7/complete');assert.equal(arrRequests[2].method,'POST');
+ assert.equal(arrRequests.at(-1).strPath,'/api/employee/orders/7/complete');assert.equal(arrRequests.at(-1).method,'POST');
 });

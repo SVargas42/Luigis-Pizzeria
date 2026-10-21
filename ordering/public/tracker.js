@@ -1,5 +1,5 @@
 const arrTrackerStages=['order_received','order_confirmed','preparing_order','cooking_order','order_ready'];
-const arrTrackerLabels=['Order received','Order confirmed','Preparing order','Cooking order','Order ready'];
+const arrTrackerLabels=['Order received','Order confirmed','Preparing','Cooking','Ready'];
 const strTrackingToken=new URLSearchParams(location.search).get('token')||'';
 const getTrackerElement=strId=>document.getElementById(strId);
 let bTrackerPaused=false,bTrackerBusy=false,bTrackerFinished=false,strPreviousMessage='';
