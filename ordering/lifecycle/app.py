@@ -54,6 +54,7 @@ class Pizza(BaseModel):
 
 
 class Side(BaseModel):
+    size: str | None = Field(default=None, min_length=1, max_length=20)
     name: str = Field(min_length=1, max_length=60)
     quantity: StrictInt = Field(ge=1, le=99)
 
@@ -261,7 +262,36 @@ def remove_menu_item(strCategory: MenuCategory, strName: str, objInput: MenuDele
     return {'category': strCategory, 'name': objItem['name'], 'is_active': 0}
 
 
-def price_items(objPayload, arrMenu):
+def price_side(objCursor, objSide, nBasePrice):
+    objCursor.execute(
+        "SELECT size FROM menu_variations WHERE category='side' AND name=%s",
+        (objSide.name,),
+    )
+    arrSizes = [objRow['size'] for objRow in objCursor.fetchall()]
+    strSize = objSide.size or ('Medium' if 'Medium' in arrSizes else 'Regular')
+    nUnit = nBasePrice
+    if arrSizes:
+        objCursor.execute(
+            """SELECT price_cents FROM menu_variations
+               WHERE category='side' AND name=%s AND size=%s AND is_active=1""",
+            (objSide.name, strSize),
+        )
+        objVariation = objCursor.fetchone()
+        if not objVariation:
+            raise HTTPException(422, 'Selected size is unavailable')
+        nUnit = objVariation['price_cents']
+        if type(nUnit) is not int or not 0 < nUnit <= 1000000:
+            raise HTTPException(422, 'Invalid size price')
+    elif strSize != 'Regular':
+        raise HTTPException(422, 'This item has no size options')
+    return {
+        'kind': 'side',
+        'description': f'{objSide.name} ({strSize})' if arrSizes else objSide.name,
+        'size': strSize, 'quantity': objSide.quantity, 'unit': nUnit,
+    }
+
+
+def price_items(objPayload, arrMenu, objCursor):
     mapPrices = {(objRow['category'], objRow['name']): objRow['price_cents'] for objRow in arrMenu}
     def menu_price(strKind, strName):
         nPrice = mapPrices.get((strKind, strName))
@@ -275,14 +305,14 @@ def price_items(objPayload, arrMenu):
         nUnit = menu_price('pizza', objPizza.size) + sum(menu_price('topping', strName) for strName in objPizza.toppings)
         arrItems.append({'kind': 'pizza', 'description': objPizza.size + ' pizza' + (' with ' + ', '.join(objPizza.toppings) if objPizza.toppings else ''), 'quantity': 1, 'unit': nUnit})
     for objSide in objPayload.sides:
-        arrItems.append({'kind': 'side', 'description': objSide.name, 'quantity': objSide.quantity, 'unit': menu_price('side', objSide.name)})
+        arrItems.append(price_side(objCursor, objSide, menu_price('side', objSide.name)))
     for objDrink in objPayload.drinks:
         arrItems.append({'kind': 'drink', 'description': f'{objDrink.name} ({objDrink.size})', 'quantity': objDrink.quantity, 'unit': menu_price('drink', objDrink.size) + menu_price('drink_name', objDrink.name)})
     return arrItems
 
 
 def receipt(objCursor, objOrder):
-    objCursor.execute('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=%s ORDER BY id', (objOrder['id'],))
+    objCursor.execute('SELECT kind,description,size,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=%s ORDER BY id', (objOrder['id'],))
     return {
         'orderNumber': f"LP-{objOrder['id']}", 'orderId': objOrder['id'],
         'customer': {'name': objOrder['customer_name'], 'email': objOrder['customer_email'], 'phone': objOrder['customer_phone']},
@@ -304,7 +334,7 @@ def create_order_once(objPayload: Checkout, objTasks: BackgroundTasks):
                     raise HTTPException(409, 'Retry key belongs to a legacy checkout')
                 return receipt(objCursor, objExisting)
             objCursor.execute(strActiveMenuQuery)
-            arrItems = price_items(objPayload, objCursor.fetchall())
+            arrItems = price_items(objPayload, objCursor.fetchall(), objCursor)
             nSubtotal = sum(objItem['unit'] * objItem['quantity'] for objItem in arrItems)
             nRate = int(os.getenv('TAX_BASIS_POINTS', '0'))
             if not 0 <= nRate <= 10000:
@@ -317,7 +347,7 @@ def create_order_once(objPayload: Checkout, objTasks: BackgroundTasks):
                               (str(objPayload.requestKey), nCustomerId, f'{objCustomer.firstName} {objCustomer.lastName}', objCustomer.email, objCustomer.phone, nSubtotal + nTax, objPayload.paymentMethod, secrets.token_hex(32), 'pending' if objPayload.paymentMethod == 'online' else 'unpaid', nSubtotal, nTax))
             nOrderId = objCursor.lastrowid
             for objItem in arrItems:
-                objCursor.execute('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(%s,%s,%s,%s,%s)', (nOrderId, objItem['kind'], objItem['description'], objItem['quantity'], objItem['unit']))
+                objCursor.execute('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents,size) VALUES(%s,%s,%s,%s,%s,%s)', (nOrderId, objItem['kind'], objItem['description'], objItem['quantity'], objItem['unit'], objItem.get('size')))
             objCursor.execute("INSERT INTO order_events(order_id,event_type,to_status,details) VALUES(%s,'created','received','Lifecycle order_received')", (nOrderId,))
             objCursor.execute('SELECT * FROM orders WHERE id=%s', (nOrderId,))
             objReceipt = receipt(objCursor, objCursor.fetchone())

@@ -48,10 +48,12 @@ def objHarness(monkeypatch):
         PRAGMA foreign_keys=ON;
         CREATE TABLE customers(id INTEGER PRIMARY KEY,first_name TEXT,last_name TEXT,email TEXT UNIQUE,phone TEXT);
         CREATE TABLE orders(id INTEGER PRIMARY KEY,request_key TEXT UNIQUE,customer_id INTEGER REFERENCES customers(id),customer_name TEXT,customer_email TEXT,customer_phone TEXT,total_cents INTEGER,payment_method TEXT,tracking_token TEXT UNIQUE,tracking_status TEXT,payment_status TEXT,subtotal_cents INTEGER,tax_cents INTEGER,estimated_pickup_time timestamp,status TEXT DEFAULT 'received',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE order_items(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),kind TEXT,description TEXT,quantity INTEGER,unit_price_cents INTEGER);
+        CREATE TABLE order_items(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),kind TEXT,description TEXT,quantity INTEGER,unit_price_cents INTEGER,size TEXT);
         CREATE TABLE order_events(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),actor_email TEXT,event_type TEXT,from_status TEXT,to_status TEXT,details TEXT);
         CREATE TABLE menu_prices(category TEXT,name TEXT,price_cents INTEGER,description TEXT DEFAULT '',is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name));
         INSERT INTO menu_prices(category,name,price_cents) VALUES('pizza','Small',1000),('topping','Cheese',150),('side','Breadsticks',500),('drink','Small',200),('drink_name','Water',0);
+        CREATE TABLE menu_variations(category TEXT,name TEXT,size TEXT,price_cents INTEGER,is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name,size),FOREIGN KEY(category,name) REFERENCES menu_prices(category,name) ON UPDATE CASCADE ON DELETE RESTRICT);
+        INSERT INTO menu_variations(category,name,size,price_cents) VALUES('side','Breadsticks','Small',400),('side','Breadsticks','Medium',500),('side','Breadsticks','Large',600);
     ''')
     @contextmanager
     def test_database():

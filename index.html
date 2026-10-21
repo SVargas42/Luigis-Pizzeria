@@ -93,6 +93,16 @@
         <div class="menu-card"><h3>Your pizzas</h3><p class="menu-hint">Choose a size and toppings for each pizza.</p><div id="pizzas-container"></div><button class="btn btn-outline-secondary btn-sm mt-3" type="button" id="add-pizza">＋ Add another pizza</button></div>
         <div class="menu-card"><h3>Something on the side?</h3><p class="menu-hint">Pick one or both sides and set the quantity for each. Leave them unchecked to skip sides.</p><div id="sides-list" class="extra-list"></div></div>
         <div class="menu-card"><h3>And something to sip</h3><p class="menu-hint">Add each drink configuration you want. You can have the same drink in different sizes.</p><div id="drinks-list" class="extra-list"></div><button class="btn btn-outline-secondary btn-sm mt-3" type="button" id="add-drink">＋ Add a drink</button></div>
+        <template id="breadstick-size-template">
+          <label class="extra-field" for="breadstick-size">
+            <span>Size</span>
+            <select id="breadstick-size" class="form-select">
+              <option value="Small">Small — $4.00</option>
+              <option value="Medium" selected>Medium — $5.00</option>
+              <option value="Large">Large — $6.00</option>
+            </select>
+          </label>
+        </template>
       </div>
       <aside class="summary" aria-live="polite" aria-label="Live order summary"><div class="d-flex justify-content-between align-items-start"><div><h3>Your order</h3><div class="summary-caption">A little taste of what's to come</div></div><span aria-hidden="true">🧾</span></div><div class="summary-lines" id="menu-summary-lines"></div><div class="summary-total"><span>Total</span><strong id="menu-total">$0.00</strong></div><div class="summary-foot">Prices include all selected items.</div></aside></div>
       <div class="alert-inline" id="menu-error" role="alert"></div>
@@ -171,17 +181,64 @@
     }
     function quantitySelect(value,label){return `<select class="form-select quantity-select" aria-label="Qty: ${label}">${Array.from({length:10},(_,i)=>`<option value="${i+1}" ${value===i+1?'selected':''}>${i+1}</option>`).join('')}</select>`}
     function quantityInput(value,label){return `<input class="form-control quantity-input side-quantity-input" type="number" min="1" max="99" step="1" inputmode="numeric" value="${value}" aria-label="Quantity of ${label}" required>`}
+    const objBreadstickPrices = {Small: 4, Medium: 5, Large: 6};
+    let strBreadstickSize = 'Medium';
+    function sideUnitPrice(objSide) {
+      return objSide.name === 'Breadsticks'
+        ? objBreadstickPrices[objSide.size || 'Medium']
+        : prices.sides[objSide.name];
+    }
+    function renderBreadstickSize() {
+      const objCheckbox = [...$('sides-list').querySelectorAll('.side-check')]
+        .find(objInput => objInput.value === 'Breadsticks');
+      if (!objCheckbox) return;
+      const objRow = objCheckbox.closest('.extra-row');
+      const objSide = state.sides.find(objItem => objItem.name === 'Breadsticks');
+      const objFragment = $('breadstick-size-template').content.cloneNode(true);
+      const objSelect = objFragment.querySelector('select');
+      const objPrice = objRow.querySelector('.extra-price');
+      objSelect.value = objSide?.size || strBreadstickSize;
+      objPrice.setAttribute('aria-live', 'polite');
+      objPrice.textContent = `${money(objBreadstickPrices[objSelect.value])} each`;
+      objSelect.addEventListener('change', () => {
+        strBreadstickSize = objSelect.value;
+        if (objSide) objSide.size = strBreadstickSize;
+        objPrice.textContent = `${money(objBreadstickPrices[strBreadstickSize])} each`;
+        renderSummary();
+      });
+      objRow.append(objFragment);
+    }
     function renderExtras(){
       $('sides-list').innerHTML=Object.entries(prices.sides).filter(([name])=>name!=='None').map(([name,price])=>{const chosen=state.sides.find(side=>side.name===name);return `<div class="extra-row"><label class="extra-choice"><input class="form-check-input side-check" type="checkbox" value="${name}" ${chosen?'checked':''}><span class="extra-name">${name}</span><span class="extra-price">${money(price)} each</span></label><div class="extra-quantity ${chosen?'':'hidden'}"><label class="side-quantity-label"><span>Qty</span>${quantityInput(chosen?.quantity||1,name)}</label></div></div>`}).join('');
       $('drinks-list').innerHTML=state.drinks.map(drink=>`<div class="extra-row drink-config" data-drink-id="${drink.id}"><label class="extra-field"><span>Drink</span><select class="form-select drink-name-select" aria-label="Drink type"><option value="">Choose a drink</option>${drinkChoices.map(name=>`<option value="${name}" ${drink.name===name?'selected':''}>${name}</option>`).join('')}</select></label><label class="extra-field"><span>Size</span><select class="form-select drink-size-select" aria-label="${drink.name||'Drink'} size"><option value="">Choose a size</option>${Object.keys(prices.drinks).map(size=>`<option value="${size}" ${drink.size===size?'selected':''}>${size} · ${money(prices.drinks[size]+(prices.beverages[drink.name]||0))}</option>`).join('')}</select></label><label class="extra-field"><span>Qty</span>${quantitySelect(drink.quantity,`${drink.name||'Drink'} quantity`)}</label><button type="button" class="btn btn-sm btn-link text-danger drink-remove" aria-label="Remove ${drink.name||'drink'}">Remove</button></div>`).join('')||'<div class="empty-cart">No drinks added yet.</div>';
-      $('sides-list').querySelectorAll('.side-check').forEach(input=>input.addEventListener('change',()=>{const name=input.value;if(input.checked)state.sides.push({name,quantity:1});else state.sides=state.sides.filter(side=>side.name!==name);renderAll();[...$('sides-list').querySelectorAll('.side-check')].find(item=>item.value===name)?.focus({preventScroll:true})}));
+      $('sides-list').querySelectorAll('.side-check').forEach(objInput => {
+        objInput.addEventListener('change', () => {
+          const strName = objInput.value;
+          if (objInput.checked) {
+            const objSide = {name: strName, quantity: 1};
+            if (strName === 'Breadsticks') objSide.size = strBreadstickSize;
+            state.sides.push(objSide);
+          } else {
+            state.sides = state.sides.filter(objSide => objSide.name !== strName);
+          }
+          renderAll();
+          [...$('sides-list').querySelectorAll('.side-check')]
+            .find(objCheckbox => objCheckbox.value === strName)
+            ?.focus({preventScroll: true});
+        });
+      });
       $('sides-list').querySelectorAll('.side-quantity-input').forEach(input=>input.addEventListener('input',()=>{const side=state.sides.find(item=>input.getAttribute('aria-label')===`Quantity of ${item.name}`);if(side){side.quantity=Number(input.value);renderSummary()}}));
       $('drinks-list').querySelectorAll('.drink-config').forEach(row=>{const drink=state.drinks.find(item=>item.id===Number(row.dataset.drinkId));row.querySelector('.drink-name-select').addEventListener('change',event=>{const id=drink.id;drink.name=event.target.value;renderAll();document.querySelector(`[data-drink-id="${id}"] .drink-name-select`)?.focus({preventScroll:true})});row.querySelector('.drink-size-select').addEventListener('change',event=>{drink.size=event.target.value;renderSummary()});row.querySelector('.quantity-select').addEventListener('change',event=>{drink.quantity=Number(event.target.value);renderSummary()});row.querySelector('.drink-remove').addEventListener('click',()=>{state.drinks=state.drinks.filter(item=>item.id!==drink.id);renderAll();const next=$('drinks-list').querySelector('.drink-config .drink-name-select');(next||$('add-drink')).focus({preventScroll:true})})});
+      renderBreadstickSize();
     }
     function lineItems(){
       const items=[];
       state.pizzas.forEach((pizza,index)=>{if(pizza.size){const toppings=pizza.toppings.length?` with ${pizza.toppings.map(name=>name.toLowerCase()).join(', ')}`:'';items.push({name:`Pizza ${index+1} ${pizza.size}${toppings}`,price:prices.pizza[pizza.size]+pizza.toppings.reduce((nSum,strName)=>nSum+objToppingPrices[strName],0)})}});
-      state.sides.forEach(side=>items.push({name:`${side.name} × ${side.quantity}`,price:prices.sides[side.name]*side.quantity}));
+      state.sides.forEach(objSide => items.push({
+        name: `${objSide.name}${objSide.name === 'Breadsticks'
+          ? ` (${objSide.size || 'Medium'})` : ''} × ${objSide.quantity}`,
+        price: sideUnitPrice(objSide) * objSide.quantity
+      }));
       state.drinks.filter(drink=>drink.name&&drink.size).forEach(drink=>items.push({name:`${drink.name} (${drink.size}) × ${drink.quantity}`,price:(prices.drinks[drink.size]+(prices.beverages[drink.name]||0))*drink.quantity}));
       return items;
     }
@@ -277,6 +334,10 @@
       requestKey ||= crypto.randomUUID();
       try{
         const objPayload={requestKey,customer:state.customer,pizzas:state.pizzas,sides:state.sides,drinks:state.drinks,paymentMethod:$('payment-method').value};
+        if (objPayload.paymentMethod === 'online' && objPayload.sides.some(objSide =>
+          objSide.name === 'Breadsticks' && (objSide.size || 'Medium') !== 'Medium')) {
+          throw Error('Small and Large Breadsticks currently require Pay at Pickup.');
+        }
         if(objPayload.paymentMethod==='online'){if(typeof beginStripeCheckout!=='function')throw Error('Payment tools are still loading. Please retry.');await beginStripeCheckout(objPayload);return;}
         const objResponse=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(objPayload)});
         const objReceipt=await objResponse.json();if(!objResponse.ok)throw Error(objReceipt.error||'Unable to place order.');
