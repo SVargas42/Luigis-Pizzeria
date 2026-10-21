@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createAccountService,hashPassword,digestToken,deliverAccountMail} from '../accounts.js';
+import nodemailer from 'nodemailer';
 function createStore(){
  let objState={accounts:[],sessions:[],actions:[],mail:[],audit:[],throttles:new Map()};
  const now=()=>new Date().toISOString();
@@ -94,4 +95,12 @@ test('email outbox clears sensitive message after delivery and retries provider 
  const objStore=createStore(),objService=createAccountService(objStore.pool,objConfig);await objService.handle(request(),'/api/auth/register',objProfile);
  const objFetch=objTest.mock.method(globalThis,'fetch',async()=>({ok:false}));await deliverAccountMail(objStore.pool,objConfig);assert.equal(objStore.state.mail[0].attempts,1);assert.ok(objStore.state.mail[0].message.includes('#action=verify'));
  objFetch.mock.mockImplementation(async(strUrl,objOptions)=>{assert.equal(strUrl,'https://api.resend.com/emails');assert.equal(objOptions.headers['Idempotency-Key'],objStore.state.mail[0].id);return {ok:true};});await deliverAccountMail(objStore.pool,objConfig);assert.equal(objStore.state.mail[0].message,'');assert.ok(objStore.state.mail[0].sent_at);
+});
+
+test('SMTP signup and durable outbox retry work without Resend credentials',async objTest=>{
+ const objSmtpConfig={...objConfig,mailProvider:'smtp',mailKey:undefined,smtp:{host:'smtp.gmail.com',port:587,from:'sender@example.com',user:'sender@example.com',password:'test-password'}};
+ const objStore=createStore(),objService=createAccountService(objStore.pool,objSmtpConfig);assert.equal((await objService.handle(request(),'/api/auth/register',objProfile)).status,201);
+ let bFail=true;objTest.mock.method(nodemailer,'createTransport',()=>({async sendMail(){if(bFail)throw Error('Simulated unavailable SMTP');return {accepted:[objProfile.email.toLowerCase()]};},close(){}}));
+ await deliverAccountMail(objStore.pool,objSmtpConfig);assert.equal(objStore.state.mail[0].attempts,1);assert.ok(objStore.state.mail[0].message);assert.equal(objStore.state.mail[0].sent_at,undefined);
+ bFail=false;await deliverAccountMail(objStore.pool,objSmtpConfig);assert.equal(objStore.state.mail[0].attempts,2);assert.equal(objStore.state.mail[0].message,'');assert.ok(objStore.state.mail[0].sent_at);
 });
