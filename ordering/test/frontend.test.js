@@ -28,6 +28,13 @@ function createHarness(bFail=false) {
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
+
+test('cancelled customer order history overrides its former preparation stage',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("renderCustomerOrders([{id:7,status:'cancelled',tracking_status:'cooking_order',total_cents:1000,created_at:'2026-10-21T12:00:00Z',items:[]}])",objHarness.objContext);
+ const objCard=objHarness.mapElements.get('customer-orders-list').children[0];
+ assert.ok(objCard.children.some(objChild=>objChild.textContent==='This order was cancelled.'));
+});
 test('guest details place email before the optional phone field',()=>{
  const nEmailPosition=strHtml.indexOf('for="email"'),nPhonePosition=strHtml.indexOf('for="phone"');
  assert.ok(nEmailPosition>=0&&nPhonePosition>nEmailPosition);

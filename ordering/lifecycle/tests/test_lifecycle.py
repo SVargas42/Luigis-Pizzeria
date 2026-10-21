@@ -76,6 +76,35 @@ def payload(strMethod='in_store'):
     return {'requestKey': str(uuid4()), 'customer': {'firstName': 'Ada', 'lastName': 'Lovelace', 'email': 'ada@example.com', 'phone': '5551234567'}, 'pizzas': [{'size': 'Small', 'toppings': ['Cheese']}], 'sides': [{'name': 'Breadsticks', 'quantity': 2}], 'drinks': [{'name': 'Water', 'size': 'Small', 'quantity': 1}], 'paymentMethod': strMethod, 'totalCents': 1}
 
 
+@pytest.mark.parametrize('bOmitted', [False, True])
+def test_guest_pickup_optional_phone_matches_the_form(objHarness, bOmitted):
+    objClient, objConnection, _ = objHarness
+    objPayload = payload()
+    if bOmitted:
+        objPayload['customer'].pop('phone')
+    else:
+        objPayload['customer']['phone'] = ''
+    objResponse = objClient.post('/api/orders', json=objPayload)
+    assert objResponse.status_code == 201
+    assert objResponse.json()['customer']['phone'] == ''
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
+    assert objClient.post('/api/orders', json=objPayload).json() == objResponse.json()
+    assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 1
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
+
+
+def test_checkout_validation_names_fields_without_echoing_customer_values(objHarness):
+    objPayload = payload()
+    objPayload['customer']['email'] = 'sensitive-invalid-email'
+    objPayload['customer']['phone'] = 'private-bad-number'
+    objResponse = objHarness[0].post('/api/orders', json=objPayload)
+    assert objResponse.status_code == 422
+    assert set(objResponse.json()['fields']) == {'customer.email', 'customer.phone'}
+    assert 'valid email' in objResponse.json()['error']
+    assert 'sensitive-invalid-email' not in objResponse.text
+    assert 'private-bad-number' not in objResponse.text
+
+
 def test_checkout_retry_receipt_tracker_and_mail(objHarness):
     objClient, objConnection, arrMail = objHarness
     objPayload = payload()
@@ -124,7 +153,7 @@ def test_inactive_menu_choices_reject_new_orders_but_preserve_receipts(objHarnes
     assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
 
 
-@pytest.mark.parametrize('strField,objValue', [('phone',''),('phone','-------'),('email','bad'),('firstName',' ')])
+@pytest.mark.parametrize('strField,objValue', [('phone',None),('phone','-------'),('email','bad'),('firstName',' ')])
 def test_invalid_contact_leaves_no_records(objHarness, strField, objValue):
     objPayload = payload()
     objPayload['customer'][strField] = objValue

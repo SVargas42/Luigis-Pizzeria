@@ -31,3 +31,21 @@ test('tracker renders five stages, polls estimates and supports pause and manual
  objHarness.getElement('tracker-pause').handlers.click();objHarness.fail();objHarness.poll();await settle();assert.match(objHarness.getElement('tracker-message').textContent,/retry/);
  objHarness.recover();objHarness.objOrder.status='order_ready';objHarness.poll();await settle();assert.equal(objHarness.getElement('tracker-progress').attrs['aria-valuenow'],'5');
 });
+
+test('ready orders keep polling until pickup, then stop with every stage complete',async()=>{
+ const objHarness=trackerHarness();await settle();
+ objHarness.objOrder.status='order_ready';objHarness.poll();await settle();
+ assert.equal(objHarness.getElement('tracker-stages').children[4].attrs['aria-current'],'step');
+ objHarness.objOrder.completed=true;objHarness.poll();await settle();
+ assert.equal(objHarness.getElement('tracker-message').textContent,'Your order has been picked up.');
+ assert.ok(objHarness.getElement('tracker-stages').children.every(objStep=>objStep.className==='is-complete'));
+ const nRequests=objHarness.nRequests;objHarness.poll();await settle();assert.equal(objHarness.nRequests,nRequests);
+});
+
+test('cancelled orders have no active or completed stage and stop automatic polling',async()=>{
+ const objHarness=trackerHarness();await settle();objHarness.objOrder.cancelled=true;objHarness.poll();await settle();
+ assert.equal(objHarness.getElement('tracker-progress').attrs['data-state'],'cancelled');
+ assert.equal(objHarness.getElement('tracker-message').textContent,'This order was cancelled.');
+ assert.ok(objHarness.getElement('tracker-stages').children.every(objStep=>objStep.className==='is-upcoming'));
+ const nRequests=objHarness.nRequests;objHarness.poll();await settle();assert.equal(objHarness.nRequests,nRequests);
+});

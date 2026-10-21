@@ -5,6 +5,15 @@ import Stripe from 'stripe';
 import {createPaymentService,makeQuote,canonicalCheckout,verifyPaidSession} from '../payments.js';
 import {paymentStore} from './payment-store.js';
 const objStripeSdk=new Stripe('sk_test_unit_only');
+
+test('guest Stripe checkout accepts an omitted phone but an account profile still requires it',async()=>{
+ const objHarness=harness();objHarness.objInput.customer.phone='';
+ const objResult=await objHarness.objService.createCheckout(objHarness.objInput,null);
+ assert.equal(objResult.state,'open');
+ assert.equal(JSON.parse(objHarness.objStore.state.payments[0].quote_json).customer.phone,'');
+ const objOther=harness();
+ assert.throws(()=>canonicalCheckout(objOther.objInput,{id:'7',...objOther.objInput.customer,phone:''}),objError=>objError.status===400);
+});
 test('checkout normalizes existing US account phone formats before order validation',()=>{
  const objInput={requestKey:randomUUID(),checkoutToken:'a'.repeat(64),customer:{firstName:'Ada',lastName:'Customer',email:'ada@example.com',phone:'5551234567'},pizzas:[{size:'Small',toppings:[]}],sides:[],drinks:[]};
  for(const strPhone of ['5551234567','+1 (555) 123-4567','(555) 123-4567']){
@@ -68,7 +77,7 @@ test('deactivating a menu item preserves an already quoted paid checkout',async(
 });
 test('server quote ignores client totals, validates contact and freezes tax with prices',()=>{
  const objHarness=harness(),objCanonical=canonicalCheckout(objHarness.objInput,null),objQuote=makeQuote(objCanonical,objHarness.objStore.mapMenu,825);assert.equal(objQuote.subtotalCents,1150);assert.equal(objQuote.taxCents,95);assert.equal(objQuote.totalCents,1245);
- assert.throws(()=>makeQuote(objCanonical,objHarness.objStore.mapMenu,-1));assert.throws(()=>canonicalCheckout({...objHarness.objInput,customer:{...objHarness.objInput.customer,phone:''}},null));assert.throws(()=>canonicalCheckout({...objHarness.objInput,checkoutToken:'bad'},null));
+ assert.throws(()=>makeQuote(objCanonical,objHarness.objStore.mapMenu,-1));assert.throws(()=>canonicalCheckout({...objHarness.objInput,customer:{...objHarness.objInput.customer,phone:'invalid'}},null));assert.throws(()=>canonicalCheckout({...objHarness.objInput,checkoutToken:'bad'},null));
 });
 test('Checkout reuses provider idempotency key and unchanged stored quote after menu changes',async()=>{
  const objHarness=harness(),objFirst=await objHarness.objService.createCheckout(objHarness.objInput,null);assert.equal(objFirst.totalCents,1245);assert.equal(objHarness.objStore.state.orders.length,0);

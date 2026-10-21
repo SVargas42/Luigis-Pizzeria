@@ -5,13 +5,14 @@ import {mailIsConfigured,sendAccountMessage} from './mail.js';
 const derivePassword=promisify(deriveKey);
 export function digestToken(strToken){return createHash('sha256').update(strToken).digest('hex');}
 function error(nStatus,strMessage){return Object.assign(new Error(strMessage),{status:nStatus});}
-export function validateProfile(objInput){
+export function validateProfile(objInput,{bRequirePhone=true}={}){
  const objResult={};
  for(const strKey of ['firstName','lastName']){const strValue=objInput?.[strKey];if(typeof strValue!=='string'||!strValue.trim()||strValue.trim().length>80||/[\x00-\x1f]/.test(strValue))throw error(400,'First and last name are required (maximum 80 characters each).');objResult[strKey]=strValue.trim();}
  if(typeof objInput?.email!=='string'||objInput.email.trim().length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(objInput.email.trim()))throw error(400,'Enter a valid email address.');
  objResult.email=objInput.email.trim().toLowerCase();
- if(typeof objInput.phone!=='string'||!/^[+0-9() .-]{7,30}$/.test(objInput.phone)||!/^\d{7,15}$/.test(objInput.phone.replace(/\D/g,'')))throw error(400,'A phone number with 7 to 15 digits is required.');
- objResult.phone=objInput.phone.trim();return objResult;
+ const strPhone=objInput.phone??'';
+ if(typeof strPhone!=='string'||((bRequirePhone||strPhone.trim()!=='')&&(!/^[+0-9() .-]{7,30}$/.test(strPhone)||!/^\d{7,15}$/.test(strPhone.replace(/\D/g,'')))))throw error(400,'Enter a phone number with 7 to 15 digits. A phone number is required for an account.');
+ objResult.phone=strPhone.trim();return objResult;
 }
 export function validatePassword(strPassword){if(typeof strPassword!=='string'||strPassword.length<12||strPassword.length>128)throw error(400,'Use a password between 12 and 128 characters.');return strPassword;}
 export async function hashPassword(strPassword){validatePassword(strPassword);const strSalt=randomBytes(16).toString('hex');const bufKey=await derivePassword(strPassword,strSalt,64,{N:32768,r:8,p:1,maxmem:67108864});return `scrypt$${strSalt}$${bufKey.toString('hex')}`;}
