@@ -5,6 +5,12 @@ const strMode=objFragment.get('action')||objQuery.get('mode')||'login';
 if(location.hash)history.replaceState(null,'',location.pathname+location.search);
 let strSelectedId=null;
 function announce(strText){$('message').textContent=strText;}
+function showRegistrationAlert(strText, bSuccess) {
+  const objAlert = $('register-alert');
+  objAlert.textContent = `${bSuccess ? 'Success' : 'Error'}: ${strText}`;
+  objAlert.className = `alert ${bSuccess ? 'alert-success' : 'alert-danger'}`;
+  objAlert.focus();
+}
 function normalizePhone(strValue){let strDigits=strValue.replace(/\D/g,'');if(strDigits.length===11&&strDigits.startsWith('1'))strDigits=strDigits.slice(1);strDigits=strDigits.slice(0,10);if(!strDigits)return '';if(strDigits.length<=3)return `(${strDigits}`;if(strDigits.length<=6)return `(${strDigits.slice(0,3)}) ${strDigits.slice(3)}`;return `(${strDigits.slice(0,3)}) ${strDigits.slice(3,6)}-${strDigits.slice(6)}`;}
 async function api(strPath,objBody){const objResponse=await fetch(strPath,objBody===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(objBody)});const objData=await objResponse.json();if(!objResponse.ok)throw Error(objData.error||'Request failed. Please retry.');return objData;}
 function textCell(strValue){const objCell=document.createElement('td');objCell.textContent=String(strValue);return objCell;}
@@ -32,10 +38,34 @@ $('account-form').onsubmit=async objEvent=>{
  try{
   const objInput={email:$('email').value,firstName:$('firstName').value,lastName:$('lastName').value,phone:$('phone').value,password:$('password').value,currentPassword:$('currentPassword').value,token:strToken};
   const strEndpoint={register:'register',login:'login',forgot:'forgot',resend:'resend',reset:'reset',invite:'accept-invite',profile:'profile',password:'password'}[strMode];
+  if (strMode === 'register') {
+    $('register-alert').classList.add('d-none');
+    const objResponse = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(objInput)
+    });
+    const objData = await objResponse.json();
+    const bSuccess = objResponse.status === 201;
+    showRegistrationAlert(
+      bSuccess
+        ? objData.message || 'Account created. Check your email for verification.'
+        : objData.error || 'Registration failed. Please retry.',
+      bSuccess
+    );
+    if (bSuccess) {
+      $('password').value = '';
+      $('account-form').hidden = true;
+    }
+    return;
+  }
   const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
   if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:'/');}
   else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
- }catch(objError){announce(objError.message);}finally{$('submit').disabled=false;}
+ }catch(objError){
+  if (strMode === 'register') showRegistrationAlert('Unable to complete registration. Please retry.', false);
+  else announce(objError.message);
+ }finally{$('submit').disabled=false;}
 };
 $('phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 $('invite-phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});

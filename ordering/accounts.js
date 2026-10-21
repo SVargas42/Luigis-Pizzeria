@@ -74,11 +74,11 @@ export function createAccountService(objPool,objConfig){
  async function handle(objRequest,strPath,objInput={}){
   if(strPath==='/api/auth/login')return login(objRequest,objInput);
   if(strPath==='/api/auth/register'){
-   requireMail();const objProfile=validateProfile(objInput);validatePassword(objInput.password);
+   const objProfile=validateProfile(objInput);validatePassword(objInput.password);
    if(objInput.role&&objInput.role!=='customer')throw error(400,'Staff accounts are invitation-only.');
-   await throttle(objRequest,objProfile.email);const strHash=await hashPassword(objInput.password);
-   try{await transaction(async objConnection=>{const objResult=await objConnection.query("INSERT INTO accounts(email,first_name,last_name,phone,password_hash,role) VALUES(?,?,?,?,?,'customer')",[objProfile.email,objProfile.firstName,objProfile.lastName,objProfile.phone,strHash]);await enqueueAction(objConnection,{id:objResult.insertId,email:objProfile.email},'verify');await audit(objConnection,null,objResult.insertId,'registered');});}catch(objError){if(objError.code!=='ER_DUP_ENTRY')throw objError;}
-   return {status:202,data:{message:'If registration is available for this email, a verification link will arrive shortly. Existing users can sign in or reset their password.'}};
+   requireMail();await throttle(objRequest,objProfile.email);const strHash=await hashPassword(objInput.password);
+   try{await transaction(async objConnection=>{const objResult=await objConnection.query("INSERT INTO accounts(email,first_name,last_name,phone,password_hash,role) VALUES(?,?,?,?,?,'customer')",[objProfile.email,objProfile.firstName,objProfile.lastName,objProfile.phone,strHash]);await enqueueAction(objConnection,{id:objResult.insertId,email:objProfile.email},'verify');await audit(objConnection,null,objResult.insertId,'registered');});}catch(objError){if(objError.code==='ER_DUP_ENTRY')throw error(409,'An account with this email already exists.');throw objError;}
+   return {status:201,data:{message:'Account created. Check your email to verify your account before signing in.'}};
   }
   if(['/api/auth/forgot','/api/auth/resend'].includes(strPath)){
    requireMail();const strEmail=typeof objInput.email==='string'?objInput.email.trim().toLowerCase():'';await throttle(objRequest,strEmail);

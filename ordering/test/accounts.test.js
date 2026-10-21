@@ -20,7 +20,7 @@ test('production origins require HTTPS and cannot carry path or credentials',()=
 });
 test('unconfigured mail fails closed for registration; public clients cannot create admins',async()=>{
  const objService=createAccountService({}, {siteUrl:'https://example.com'});
- await assert.rejects(objService.handle({headers:{}},'/api/auth/register',objProfile),objError=>objError.status===503);
+ await assert.rejects(objService.handle({headers:{}},'/api/auth/register',{...objProfile,password:'long enough password'}),objError=>objError.status===503);
  const objEnabled=createAccountService({}, {siteUrl:'https://example.com',mailKey:'test',mailFrom:'test@example.com'});
  await assert.rejects(objEnabled.handle({headers:{}},'/api/auth/register',{...objProfile,password:'long enough password',role:'admin'}),objError=>objError.status===400);
 });

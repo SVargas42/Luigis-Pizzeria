@@ -35,7 +35,7 @@ const request=(strToken='')=>({headers:{cookie:strToken?'luigi_session='+strToke
 const tokenFromMail=objMail=>new URLSearchParams(new URL(objMail.message.split('\n')[1]).hash.slice(1)).get('token');
 test('registration, email verification, session rotation, profile, password recovery and logout',async()=>{
  const objStore=createStore(),objService=createAccountService(objStore.pool,objConfig);
- const objRegister=await objService.handle(request(),'/api/auth/register',objProfile);assert.equal(objRegister.status,202);assert.equal(objStore.state.accounts[0].email_verified_at,null);assert.notEqual(objStore.state.accounts[0].password_hash,objProfile.password);
+ const objRegister=await objService.handle(request(),'/api/auth/register',objProfile);assert.equal(objRegister.status,201);assert.match(objRegister.data.message,/Account created.*verify/);assert.equal(objStore.state.accounts[0].email_verified_at,null);assert.notEqual(objStore.state.accounts[0].password_hash,objProfile.password);
  await assert.rejects(objService.handle(request(),'/api/auth/login',objProfile),objError=>objError.status===403);
  const strVerify=tokenFromMail(objStore.state.mail[0]);assert.equal(objStore.state.actions[0].token_hash,digestToken(strVerify));
  await objService.handle(request(),'/api/auth/verify',{token:strVerify});
@@ -48,6 +48,33 @@ test('registration, email verification, session rotation, profile, password reco
  const objNewLogin=await objService.handle(request(),'/api/auth/login',{...objProfile,password:'another long testing password'}),strNewToken=objNewLogin.cookie.match(/luigi_session=([^;]+)/)[1];
  await objService.handle(request(strNewToken),'/api/auth/logout',{});assert.equal(await objService.identity(request(strNewToken)),null);
 });
+test('registration rejects duplicate email with 409 without creating more accounts or verification emails',async()=>{
+ const objStore=createStore(),objService=createAccountService(objStore.pool,objConfig);
+ await objService.handle(request(),'/api/auth/register',objProfile);
+ await assert.rejects(objService.handle(request(),'/api/auth/register',{...objProfile,email:'ADA@example.com'}),objError=>objError.status===409&&objError.message==='An account with this email already exists.');
+ assert.equal(objStore.state.accounts.length,1);assert.equal(objStore.state.mail.length,1);
+ assert.equal(objStore.state.actions.length,1);assert.equal(objStore.state.audit.length,1);
+});
+
+test('registration returns specific validation errors before any database writes',async()=>{
+ const objStore=createStore(),objService=createAccountService(objStore.pool,objConfig);
+ for(const [objChange,strMessage] of [[{email:'bad'},'Enter a valid email address.'],[{password:'short'},'Use a password between 12 and 128 characters.']]){
+  await assert.rejects(objService.handle(request(),'/api/auth/register',{...objProfile,...objChange}),objError=>objError.status===400&&objError.message===strMessage);
+ }
+ assert.equal(objStore.state.accounts.length,0);assert.equal(objStore.state.throttles.size,0);
+});
+
+test('registration rolls back and propagates unexpected database failures',async()=>{
+ const objStore=createStore(),objFailure=new Error('test database failure');
+ const objPool={...objStore.pool,getConnection:async()=>{
+  const objConnection=await objStore.pool.getConnection(),fnQuery=objConnection.query;
+  objConnection.query=async(strSql,arrValues)=>{if(strSql.startsWith('INSERT INTO account_mail'))throw objFailure;return fnQuery(strSql,arrValues);};
+  return objConnection;
+ }};
+ await assert.rejects(createAccountService(objPool,objConfig).handle(request(),'/api/auth/register',objProfile),objError=>objError===objFailure);
+ assert.equal(objStore.state.accounts.length,0);assert.equal(objStore.state.actions.length,0);
+});
+
 test('admin invitations, self-protection, role updates, disabled login and session revocation',async()=>{
  const objStore=createStore();objStore.state.accounts.push({id:1,email:'owner@example.com',first_name:'Owner',last_name:'Admin',phone:'5551234567',password_hash:await hashPassword(objProfile.password),role:'admin',email_verified_at:new Date().toISOString(),disabled_at:null});objStore.state.sessions.push({token_hash:digestToken('a'.repeat(64)),account_id:1});
  const objService=createAccountService(objStore.pool,objConfig),objRequest=request('a'.repeat(64));
