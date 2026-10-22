@@ -28,6 +28,27 @@ function createHarness(bFail=false) {
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
+
+test('worker Orders navigation opens the kitchen queue without revealing admin analytics',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("setAuthState({authenticated:true,authReady:true,user:{id:'7',role:'worker',firstName:'Kitchen',lastName:'Worker',email:'worker@example.com',phone:'(555) 123-4567'}});showOrders();",objHarness.objContext);
+ assert.equal(objHarness.objContext.location.href,'/staff');
+ assert.equal(objHarness.mapElements.get('admin-analytics-link').classList.contains('hidden'),true);
+});
+
+test('checkout submits multiple distinct side selections as separate numeric quantities',async()=>{
+ const objHarness=createHarness();
+ vm.runInContext("state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}];",objHarness.objContext);
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.deepEqual(objHarness.arrRequests[0].sides,[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}]);
+});
+
+test('cancelled customer order history overrides its former preparation stage',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("renderCustomerOrders([{id:7,status:'cancelled',tracking_status:'cooking_order',total_cents:1000,created_at:'2026-10-21T12:00:00Z',items:[]}])",objHarness.objContext);
+ const objCard=objHarness.mapElements.get('customer-orders-list').children[0];
+ assert.ok(objCard.children.some(objChild=>objChild.textContent==='This order was cancelled.'));
+});
 test('guest details place email before the optional phone field',()=>{
  const nEmailPosition=strHtml.indexOf('for="email"'),nPhonePosition=strHtml.indexOf('for="phone"');
  assert.ok(nEmailPosition>=0&&nPhonePosition>nEmailPosition);

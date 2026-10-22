@@ -14,3 +14,8 @@ test('identity bridge normalizes a trusted account and rejects unsupported roles
  setIdentityResolver(async()=>({role:'owner',email:'owner@example.com'}));
  assert.equal(await resolveIdentity({}),null);
 });
+
+test('trusted worker role is preserved by the identity bridge',async()=>{
+ setIdentityResolver(async()=>({id:7,role:'worker',email:'worker@example.com',firstName:'Kitchen',lastName:'Worker',phone:'5551234567'}));
+ assert.equal((await resolveIdentity({})).role,'worker');
+});

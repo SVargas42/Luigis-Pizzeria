@@ -16,7 +16,7 @@ export function identityIsConfigured() {
 export async function resolveIdentity(objRequest) {
   const objIdentity = await fnIdentityResolver(objRequest);
   if (!objIdentity || typeof objIdentity !== 'object') return null;
-  if (!['customer', 'admin'].includes(objIdentity.role)) return null;
+  if (!['customer', 'worker', 'admin'].includes(objIdentity.role)) return null;
   if (typeof objIdentity.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(objIdentity.email.trim())) return null;
 
   return {

@@ -41,7 +41,9 @@
     .form-control,.form-select,.form-check-input{border-color:#756d61}.btn-outline-secondary{--bs-btn-border-color:#756d61}
     .demo-sign-in{width:min(92vw,460px);border:1px solid var(--line);border-radius:16px;padding:24px;color:var(--ink);box-shadow:0 18px 60px #0004}.demo-sign-in::backdrop{background:#1e1914a8}.demo-sign-in h2{font:700 1.5rem 'Playfair Display',serif}.demo-sign-in p{color:var(--muted);line-height:1.5}
   </style>
-</head>
+<style>
+.site-footer{background:#f3ede2;border-top:1px solid #d8cebd;color:#514c43;padding:34px 24px;font:14px/1.7 'DM Sans',system-ui,sans-serif}.footer-inner{max-width:1072px;margin:auto}.footer-brand{font:800 1.5rem 'Playfair Display',Georgia,serif;color:#85221d;margin:0 0 8px}.footer-intro{max-width:680px}.footer-contact{font-style:normal;margin:14px 0;overflow-wrap:anywhere}.footer-notices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.site-footer details{background:#fffefa;border:1px solid #d8cebd;border-radius:10px;padding:0 16px;align-self:start}.site-footer summary{font-weight:700;color:#315b3b;cursor:pointer;min-height:48px;padding:12px 0}.site-footer summary:focus-visible,.site-footer a:focus-visible{outline:3px solid #245d84;outline-offset:3px}.site-footer a{color:#85221d;text-decoration:underline}.site-footer details p{margin:0 0 16px}.footer-small{font-size:12px;border-top:1px solid #d8cebd;padding-top:16px;margin:0}@media(max-width:760px){.footer-notices{grid-template-columns:1fr}}
+</style><style>.status-track{gap:10px;counter-reset:order-stage}.status-track li{counter-increment:order-stage;min-width:110px;border:1px solid #d8cebd;background:#f8f3e9;padding:16px 10px;border-radius:12px}.status-track li:before{content:counter(order-stage);display:grid;place-items:center;border:1px solid currentColor;border-radius:50%;width:30px;height:30px;margin:0 auto 9px}.status-track li.current{background:#fff4ed;color:#85221d;box-shadow:inset 0 0 0 1px #a92d25;border-color:#a92d25}.status-track li.current:before{background:#a92d25;color:#fff;border-color:#a92d25}.status-track li.past{background:#edf2e9;color:#315b3b;border-color:#b6c6af}.customer-order{padding:24px;border-radius:16px}@media(max-width:520px){.status-track li{min-width:calc(50% - 10px)}}</style></head>
 <body>
   <header class="topbar">
     <div class="container d-flex align-items-center justify-content-between gap-3 py-3 flex-wrap">
@@ -141,7 +143,7 @@
     function setAuthState(objSession,bDemo=false){
       const objUser=objSession?.user||objSession;
       const bAuthenticated=Boolean(objSession?.authenticated??(objUser?.email&&objUser?.role));
-      objAuthState.user=bAuthenticated&&objUser&&['customer','admin'].includes(objUser.role)?{
+      objAuthState.user=bAuthenticated&&objUser&&['customer','worker','admin'].includes(objUser.role)?{
         id:objUser.id||objUser.email,email:String(objUser.email||''),firstName:String(objUser.firstName||''),lastName:String(objUser.lastName||''),phone:String(objUser.phone||''),role:objUser.role
       }:null;
       objAuthState.ready=Boolean(objSession?.authReady);
@@ -272,7 +274,7 @@
 
     function showHome(){ $('home-page').classList.remove('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');history.replaceState(null,'',location.pathname+location.search);$('home-title').focus({preventScroll:true});scrollToPageTop(); }
     function showOrders(){
-      if(objAuthState.user?.role==='admin'){location.href='/admin?tab=current';return;}
+      if(objAuthState.user?.role==='worker'){location.href='/staff';return;}if(objAuthState.user?.role==='admin'){location.href='/admin?tab=current';return;}
       $('home-page').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');$('orders-portal').classList.remove('hidden');$('customer-orders-panel').classList.add('hidden');$('customer-orders-error').textContent='';$('orders-title').focus({preventScroll:true});scrollToPageTop();
     }
     function startOrder(){ $('home-page').classList.add('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.remove('hidden');$('order-hero').classList.remove('hidden');goTo(canSkipContactDetails()?2:1);history.replaceState(null,'','#order'); }
@@ -283,13 +285,13 @@
       for(const objOrder of arrOrders){
         const objCard=document.createElement('article');objCard.className='customer-order';
         const objHeading=document.createElement('h3');objHeading.textContent=`Order LP-${objOrder.id} · ${money(objOrder.total_cents/100)}`;
-        const strCurrentStatus=objOrder.status==='completed'?'completed':objOrder.tracking_status||objOrder.status;
-        const objStatus=document.createElement('p');objStatus.textContent=strCurrentStatus==='cancelled'?'This order was cancelled.':`Current stage: ${{order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Baking',cooking_order:'Cooking',order_ready:'Ready for pickup',received:'Order received',preparing:'Baking',ready:'Ready for pickup',completed:'Picked up'}[strCurrentStatus]||'Status unavailable'}.`;
+        const strCurrentStatus=['completed','cancelled'].includes(objOrder.status)?objOrder.status:objOrder.tracking_status||objOrder.status;
+        const objStatus=document.createElement('p');objStatus.textContent=strCurrentStatus==='cancelled'?'This order was cancelled.':`Current stage: ${{order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Preparing',cooking_order:'Cooking',order_ready:'Ready for pickup',received:'Order received',preparing:'Preparing',ready:'Ready for pickup',completed:'Picked up'}[strCurrentStatus]||'Status unavailable'}.`;
         const objPlaced=document.createElement('p');const objPlacedDate=new Date(objOrder.created_at);objPlaced.textContent=`Placed ${Number.isNaN(objPlacedDate.getTime())?'at an unknown time':objPlacedDate.toLocaleString()}. Stage updates are posted by restaurant staff.`;
         const objTrack=document.createElement('ol');objTrack.className='status-track';objTrack.setAttribute('aria-label',`Order LP-${objOrder.id} progress`);
         const nCurrent=arrStatuses.indexOf(strCurrentStatus);
         for(let nIndex=0;nIndex<arrStatuses.length;nIndex++){
-          const objStep=document.createElement('li');objStep.textContent={order_received:'Received',order_confirmed:'Confirmed',preparing_order:'Baking',cooking_order:'Cooking',order_ready:'Ready for pickup',completed:'Picked up'}[arrStatuses[nIndex]];
+          const objStep=document.createElement('li');objStep.textContent={order_received:'Received',order_confirmed:'Confirmed',preparing_order:'Preparing',cooking_order:'Cooking',order_ready:'Ready for pickup',completed:'Picked up'}[arrStatuses[nIndex]];
           if(strCurrentStatus==='cancelled')objStep.classList.toggle('cancelled',nIndex===0);
           else if(nIndex<nCurrent)objStep.classList.add('past');
           else if(nIndex===nCurrent){objStep.classList.add('current');objStep.setAttribute('aria-current','step');}
@@ -364,5 +366,21 @@
 
   </script>
 <script src="/stripe-checkout.js" defer></script>
+
+<footer class="site-footer" aria-label="Restaurant information">
+<div class="footer-inner"><p class="footer-brand">Luigi’s Pizza</p><p class="footer-intro">A little information before you order. Please review ingredients, payment details, and how your information is used.</p>
+<address class="footer-contact">Family-owned in Cookeville, Tennessee · <a href="tel:+19313723122">931-372-3122</a> · <a href="mailto:l7163747@gmail.com">l7163747@gmail.com</a></address><div class="footer-notices">
+<details id="allergen-information"><summary>Allergens &amp; ingredients</summary><p>Have a food allergy? Call <a href="tel:+19313723122">931-372-3122</a> before placing your order to discuss your allergy with our team. Removing a topping does not establish that a meal is free of that ingredient or safe from cross-contact.</p><p>Avoid assuming an item is allergen-free based on its name or the choices shown online. Call us before ordering to discuss the ingredients and preparation of the items you are considering. Online topping choices do not communicate an allergy request to the kitchen.</p><p>The nine major US food allergens are milk, eggs, fish, crustacean shellfish, tree nuts, peanuts, wheat, soybeans, and sesame. Other ingredients can also cause reactions. <a href="https://www.fda.gov/consumers/consumer-updates/have-food-allergies-read-label" rel="noreferrer">Read FDA food allergy guidance</a>.</p></details>
+<details id="ordering-information"><summary>Ordering &amp; payments</summary><p>Review your selections, contact details, subtotal, tax, and total before submitting an order. Pickup times and kitchen stages are estimates updated by staff.</p><p>Online payment is confirmed only after the payment provider verifies it. If payment is uncertain, check its status before paying again. Pay-at-pickup orders remain unpaid until collected.</p><p>For order changes, cancellations, or refund requests, contact the restaurant directly. Cancelling an order does not automatically refund an online payment.</p></details>
+<details id="refund-policy"><summary>Cancellations &amp; refunds</summary>
+<p>We want every family meal to be right. If there is a problem with your order, call <a href="tel:+19313723122">931-372-3122</a> so our team can help. Have your order number and a description of the issue ready. You can also email <a href="mailto:l7163747@gmail.com">l7163747@gmail.com</a>; call for time-sensitive changes.</p>
+<p><strong>Changes and cancellations.</strong> Contact us as soon as possible. We can cancel and refund an order that has not entered preparation. Once preparation has started, changes or cancellations depend on how far the order has progressed and cannot be guaranteed. Closing a payment page does not cancel an order.</p>
+<p><strong>Incorrect, missing, or unsatisfactory items.</strong> Please report the issue promptly, preferably on the day of pickup and within 24 hours, with your order number. We will review the issue and arrange an appropriate remake, replacement, or refund for the affected items. Photos may help us resolve the issue, but do not send sensitive payment information.</p>
+<p><strong>Orders we cannot fulfill.</strong> If we cancel your order or cannot provide an item you paid for, we will offer an agreed replacement or refund the unavailable items. If we cannot fulfill the order, we will refund the amount paid.</p>
+<p><strong>Missed pickups and preferences.</strong> Prepared orders that are not collected, changes of mind after preparation, and items prepared as ordered are not automatically refundable. Please contact us so we can review the circumstances.</p>
+<p><strong>Receiving a refund.</strong> Approved online refunds are returned through the original payment method. Processing time depends on the payment provider and your bank. An unpaid pay-at-pickup order has no online payment to refund. We will confirm a refund separately from an order cancellation.</p>
+<p>This policy does not limit any rights or remedies required by applicable law.</p></details><details id="privacy-information"><summary>Privacy &amp; your information</summary><p>This ordering service uses the contact details you supply to manage your account, fulfill orders, and send account and order emails. Order records include the items ordered, amounts, and payment status. Passwords are stored as hashes.</p><p>Online card details are entered on Stripe’s hosted checkout and are not stored in the restaurant’s database. Stripe processes online payment information; Google’s Gmail service delivers transactional emails.</p><p>Signing in uses a session cookie. Online checkout also stores a temporary access token in your browser to recover payment status. Keep receipt and tracking links private.</p><p>External fonts and images may connect your browser to their providers. For privacy questions or to request access, correction, or deletion of your account information, email <a href="mailto:l7163747@gmail.com">l7163747@gmail.com</a>. We may need to verify your identity and retain transaction records required for payment, dispute, or legal obligations. Do not email passwords or card details.</p></details>
+</div><p class="footer-small">Luigi’s Pizza · Cookeville, Tennessee · Family-owned. Your receipt shows the confirmed order total.</p></div>
+</footer>
 </body>
 </html>

@@ -16,6 +16,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
 from .order_mail import enqueue_receipt, enqueue_progress
+from .validation_messages import checkout_validation_error
 from .menu_queries import (
     strActiveMenuQuery, strAdminMenuQuery, strInsertMenuQuery,
     strUpdateMenuQuery, strDeleteMenuQuery, strLockMenuQuery,
@@ -30,7 +31,7 @@ class Customer(BaseModel):
     firstName: str = Field(min_length=1, max_length=80)
     lastName: str = Field(min_length=1, max_length=80)
     email: str = Field(max_length=254)
-    phone: str = Field(min_length=7, max_length=30)
+    phone: str = Field(default='', max_length=30)
     model_config = ConfigDict(str_strip_whitespace=True)
 
     @field_validator('email')
@@ -43,7 +44,9 @@ class Customer(BaseModel):
     @field_validator('phone')
     @classmethod
     def phone_valid(cls, strValue):
-        if not re.fullmatch(r'[0-9+() .-]+', strValue) or len(re.sub(r'\D', '', strValue)) < 7:
+        if not strValue:
+            return ''
+        if not re.fullmatch(r'[0-9+() .-]+', strValue) or not 7 <= len(re.sub(r'\D', '', strValue)) <= 15:
             raise ValueError('Valid phone required')
         return strValue
 
@@ -166,7 +169,7 @@ async def http_error(objRequest, objError):
 async def validation_error(objRequest, objError):
     if objRequest.url.path.startswith('/api/admin/menu'):
         return JSONResponse({'error': 'Check the menu type, name, description, whole-cent price and confirmation.'}, status_code=422)
-    return JSONResponse({'error': 'Check contact details, menu selections and required fields.'}, status_code=422)
+    return JSONResponse(checkout_validation_error(objError), status_code=422)
 
 
 @app.exception_handler(pymysql.MySQLError)

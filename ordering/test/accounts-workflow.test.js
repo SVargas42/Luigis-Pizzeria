@@ -86,6 +86,21 @@ test('admin invitations, self-protection, role updates, disabled login and sessi
  await objService.handle(objRequest,'/api/admin/accounts/update',{id:'2',role:'customer',disabled:true,currentPassword:objProfile.password});assert.equal(await objService.identity(request(strToken)),null);
  await assert.rejects(objService.handle(request(),'/api/auth/login',objProfile),objError=>objError.status===401);
 });
+
+test('worker invitation, acceptance and login preserve least privilege and role changes revoke sessions',async()=>{
+ const objStore=createStore();objStore.state.accounts.push({id:1,email:'owner@example.com',first_name:'Owner',last_name:'Admin',phone:'5551234567',password_hash:await hashPassword(objProfile.password),role:'admin',email_verified_at:new Date().toISOString(),disabled_at:null});objStore.state.sessions.push({token_hash:digestToken('a'.repeat(64)),account_id:1});
+ const objService=createAccountService(objStore.pool,objConfig),objAdminRequest=request('a'.repeat(64));
+ await assert.rejects(objService.handle(request(),'/api/auth/register',{...objProfile,role:'worker'}),objError=>objError.status===400);
+ await objService.handle(objAdminRequest,'/api/admin/accounts/invite',{...objProfile,role:'worker',currentPassword:objProfile.password});
+ assert.equal(objStore.state.accounts[1].role,'worker');assert.equal(objStore.state.accounts[1].password_hash,null);
+ await objService.handle(request(),'/api/auth/accept-invite',{token:tokenFromMail(objStore.state.mail[0]),password:objProfile.password});
+ const objLogin=await objService.handle(request(),'/api/auth/login',objProfile),strToken=objLogin.cookie.match(/luigi_session=([^;]+)/)[1],objWorkerRequest=request(strToken);
+ assert.equal(objLogin.data.user.role,'worker');assert.equal((await objService.identity(objWorkerRequest)).role,'worker');
+ for(const strPath of ['/api/admin/accounts/invite','/api/admin/accounts/update'])await assert.rejects(objService.handle(objWorkerRequest,strPath,{...objProfile,role:'admin',currentPassword:objProfile.password}),objError=>objError.status===403);
+ await objService.handle(objAdminRequest,'/api/admin/accounts/update',{id:'2',role:'customer',disabled:false,currentPassword:objProfile.password});
+ assert.equal(await objService.identity(objWorkerRequest),null);
+ assert.equal((await objService.handle(request(),'/api/auth/login',objProfile)).data.user.role,'customer');
+});
 test('login rate limiting rejects repeated failures before unbounded password work',async()=>{
  const objStore=createStore(),objService=createAccountService(objStore.pool,objConfig);
  for(let nAttempt=0;nAttempt<10;nAttempt++)await assert.rejects(objService.handle(request(),'/api/auth/login',{email:'missing@example.com',password:'wrong'}),objError=>objError.status===401);

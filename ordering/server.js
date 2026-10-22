@@ -10,7 +10,7 @@ import {createAccountService,deliverAccountMail} from './accounts.js';
 import {mailConfigFromEnvironment} from './mail.js';
 import {setIdentityResolver} from './identity.js';
 import {loadAnalytics} from './analytics.js';
-import {requiresStaffAuthentication} from './admin-access.js';
+import {requiresStaffAuthentication,canAccessStaffRoute} from './admin-access.js';
 import {createMenuProxy} from './menu-proxy.js';
 
 for (const key of ['DB_PASSWORD','SITE_URL']) {
@@ -36,6 +36,7 @@ async function isAdminRequest(req) {
  const objIdentity=await resolveIdentity(req);
  return objIdentity?.role==='admin';
 }
+async function isAllowedStaffRequest(req,objUrl){return canAccessStaffRoute((await resolveIdentity(req))?.role,objUrl,req.method);}
 async function body(req) {
  if (!(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) throw new Error('JSON required');
  return JSON.parse(await rawBody(req,32768));
@@ -59,7 +60,7 @@ const server = http.createServer(async(req,res)=>{
    try{const objResult=await objAccounts.handle(req,url.pathname,objInput);if(objResult.cookie)res.setHeader('Set-Cookie',objResult.cookie);return send(res,objResult.status,objResult.data);}catch(objError){return send(res,objError.status||(objError.code==='ER_DUP_ENTRY'?409:503),{error:objError.status?objError.message:objError.code==='ER_DUP_ENTRY'?'This account already exists.':'Account service is temporarily unavailable.'});}
   }
   if (requiresStaffAuthentication(url)) {
-   if (!await isAdminRequest(req)) {if(!url.pathname.startsWith('/api/')){res.writeHead(303,{Location:'/account?mode=login&next='+encodeURIComponent(url.pathname)});return res.end();}return send(res,403,{error:'Administrator account required.'});}
+   if (!await isAllowedStaffRequest(req,url)) {if(!url.pathname.startsWith('/api/')){res.writeHead(303,{Location:'/account?mode=login&next='+encodeURIComponent(url.pathname)});return res.end();}return send(res,403,{error:'This account does not have permission for this staff action.'});}
   }
   const objMenuResponse=await forwardMenuRequest(req,url);
   if(objMenuResponse)return send(res,objMenuResponse.status,objMenuResponse.data);
@@ -94,7 +95,7 @@ const server = http.createServer(async(req,res)=>{
   }
   const bLifecycleRoute=(req.method==='POST'&&url.pathname==='/api/orders') || /^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
   if(bLifecycleRoute){
-   if(url.pathname.startsWith('/api/employee/')&&!await isAdminRequest(req)){
+   if(url.pathname.startsWith('/api/employee/')&&!await isAllowedStaffRequest(req,url)){
     return send(res,403,{error:'Administrator account required'});
    }
    let objSubmit=['POST','PATCH'].includes(req.method)?await body(req):undefined;
@@ -148,7 +149,7 @@ const server = http.createServer(async(req,res)=>{
   }
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,(await loadAnalytics(pool)).employees);
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,(await loadAnalytics(pool)).business);
-  const mapBrowserModules={'/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js','/account.js':'./public/account.js','/stripe-checkout.js':'./public/stripe-checkout.js'};
+  const mapBrowserModules={'/staff.js':'./public/staff.js','/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js','/account.js':'./public/account.js','/stripe-checkout.js':'./public/stripe-checkout.js'};
   if (req.method==='GET' && mapBrowserModules[url.pathname]) {
    const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));
    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(strSource);
@@ -202,7 +203,7 @@ const server = http.createServer(async(req,res)=>{
     return send(res,200,{items:arrItems,totalCents:nTotal});
    }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
-  const pages={'/account':'account.html','/admin/accounts':'account.html','/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
+  const pages={'/staff':'staff.html','/account':'account.html','/admin/accounts':'account.html','/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
   if (req.method==='GET' && pages[url.pathname]) {
    const html=await readFile(new URL(url.pathname==='/'?'../index.html':`./public/${pages[url.pathname]}`,import.meta.url));
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(html);

@@ -14,9 +14,10 @@ async function refreshTracker(){
   getTrackerElement('tracker-order').textContent=objOrder.orderNumber;
   const strMessage=objOrder.cancelled?'This order was cancelled.':objOrder.completed?'Your order has been picked up.':arrTrackerLabels[nStage];
   if(strPreviousMessage!==strMessage)getTrackerElement('tracker-message').textContent=strMessage;
-  strPreviousMessage=strMessage;bTrackerFinished=objOrder.completed||objOrder.cancelled||objOrder.status==='order_ready';
+  strPreviousMessage=strMessage;bTrackerFinished=Boolean(objOrder.completed||objOrder.cancelled);
   const objStages=getTrackerElement('tracker-stages');objStages.replaceChildren();
-  arrTrackerLabels.forEach((strLabel,nIndex)=>{const objStep=document.createElement('li');objStep.className='list-group-item'+(nIndex===nStage?' active':'');objStep.textContent=strLabel+(nIndex<nStage?' · Complete':'');if(nIndex===nStage)objStep.setAttribute('aria-current','step');objStages.append(objStep);});
+  arrTrackerLabels.forEach((strLabel,nIndex)=>{const objStep=document.createElement('li');const bComplete=!objOrder.cancelled&&(objOrder.completed||nIndex<nStage);const bCurrent=!objOrder.cancelled&&!objOrder.completed&&nIndex===nStage;objStep.className=bComplete?'is-complete':bCurrent?'is-current':'is-upcoming';objStep.textContent=strLabel+(bComplete?' · Complete':'');if(bCurrent)objStep.setAttribute('aria-current','step');objStages.append(objStep);});
+  getTrackerElement('tracker-progress').setAttribute('data-state',objOrder.cancelled?'cancelled':objOrder.completed?'completed':'active');
   getTrackerElement('tracker-progress').setAttribute('aria-valuenow',String(nStage+1));getTrackerElement('tracker-progress').setAttribute('aria-valuetext',strMessage);getTrackerElement('tracker-fill').style.width=`${(nStage+1)*20}%`;
   getTrackerElement('tracker-estimate').textContent=objOrder.estimatedPickupTime?`Estimated pickup: ${new Date(objOrder.estimatedPickupTime).toLocaleString()}`:'Awaiting kitchen confirmation…';
  }catch(objError){getTrackerElement('tracker-message').textContent=objError.message+' Automatic updates will retry.';strPreviousMessage='';}

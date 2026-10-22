@@ -5,13 +5,14 @@ import {mailIsConfigured,sendAccountMessage} from './mail.js';
 const derivePassword=promisify(deriveKey);
 export function digestToken(strToken){return createHash('sha256').update(strToken).digest('hex');}
 function error(nStatus,strMessage){return Object.assign(new Error(strMessage),{status:nStatus});}
-export function validateProfile(objInput){
+export function validateProfile(objInput,{bRequirePhone=true}={}){
  const objResult={};
  for(const strKey of ['firstName','lastName']){const strValue=objInput?.[strKey];if(typeof strValue!=='string'||!strValue.trim()||strValue.trim().length>80||/[\x00-\x1f]/.test(strValue))throw error(400,'First and last name are required (maximum 80 characters each).');objResult[strKey]=strValue.trim();}
  if(typeof objInput?.email!=='string'||objInput.email.trim().length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(objInput.email.trim()))throw error(400,'Enter a valid email address.');
  objResult.email=objInput.email.trim().toLowerCase();
- if(typeof objInput.phone!=='string'||!/^[+0-9() .-]{7,30}$/.test(objInput.phone)||!/^\d{7,15}$/.test(objInput.phone.replace(/\D/g,'')))throw error(400,'A phone number with 7 to 15 digits is required.');
- objResult.phone=objInput.phone.trim();return objResult;
+ const strPhone=objInput.phone??'';
+ if(typeof strPhone!=='string'||((bRequirePhone||strPhone.trim()!=='')&&(!/^[+0-9() .-]{7,30}$/.test(strPhone)||!/^\d{7,15}$/.test(strPhone.replace(/\D/g,'')))))throw error(400,'Enter a phone number with 7 to 15 digits. A phone number is required for an account.');
+ objResult.phone=strPhone.trim();return objResult;
 }
 export function validatePassword(strPassword){if(typeof strPassword!=='string'||strPassword.length<12||strPassword.length>128)throw error(400,'Use a password between 12 and 128 characters.');return strPassword;}
 export async function hashPassword(strPassword){validatePassword(strPassword);const strSalt=randomBytes(16).toString('hex');const bufKey=await derivePassword(strPassword,strSalt,64,{N:32768,r:8,p:1,maxmem:67108864});return `scrypt$${strSalt}$${bufKey.toString('hex')}`;}
@@ -116,14 +117,14 @@ export function createAccountService(objPool,objConfig){
   }
   if(objIdentity.role!=='admin')throw error(403,'Administrator access required.');
   if(strPath==='/api/admin/accounts/invite'){
-   requireMail();const objProfile=validateProfile(objInput);if(!['customer','admin'].includes(objInput.role))throw error(400,'Choose a supported role.');
+   requireMail();const objProfile=validateProfile(objInput);if(!['customer','worker','admin'].includes(objInput.role))throw error(400,'Choose a supported role.');
    const [objActor]=await objPool.query('SELECT password_hash FROM accounts WHERE id=?',[objIdentity.id]);await throttle(objRequest,objIdentity.email);if(!await verifyPassword(objInput.currentPassword,objActor.password_hash))throw error(401,'Confirm your current password.');
    await transaction(async objConnection=>{const objResult=await objConnection.query('INSERT INTO accounts(email,first_name,last_name,phone,role) VALUES(?,?,?,?,?)',[objProfile.email,objProfile.firstName,objProfile.lastName,objProfile.phone,objInput.role]);await enqueueAction(objConnection,{id:objResult.insertId,email:objProfile.email},'invite');await audit(objConnection,objIdentity.id,objResult.insertId,'invited');});
    return {status:201,data:{message:'Invitation queued. It expires in 60 minutes.'}};
   }
   if(strPath==='/api/admin/accounts/update'){
    const [objActor]=await objPool.query('SELECT password_hash FROM accounts WHERE id=?',[objIdentity.id]);await throttle(objRequest,objIdentity.email);if(!await verifyPassword(objInput.currentPassword,objActor.password_hash))throw error(401,'Confirm your current password.');
-   if(!/^\d+$/.test(String(objInput.id))||!['customer','admin'].includes(objInput.role)||typeof objInput.disabled!=='boolean')throw error(400,'Choose an account, role, and enabled status.');
+   if(!/^\d+$/.test(String(objInput.id))||!['customer','worker','admin'].includes(objInput.role)||typeof objInput.disabled!=='boolean')throw error(400,'Choose an account, role, and enabled status.');
    await transaction(async objConnection=>{
     // Lock the active admin set in a stable order so two admins cannot remove each other simultaneously.
     const arrAdmins=await objConnection.query("SELECT id FROM accounts WHERE role='admin' AND disabled_at IS NULL ORDER BY id FOR UPDATE");

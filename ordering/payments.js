@@ -6,7 +6,7 @@ const digest=strValue=>createHash('sha256').update(strValue).digest('hex');
 const fail=(nStatus,strMessage)=>{throw Object.assign(new Error(strMessage),{status:nStatus});};
 function hasToken(strToken){return typeof strToken==='string'&&/^[a-f0-9]{64}$/.test(strToken);}
 export function canonicalCheckout(objPayload,objIdentity){
- const objCustomer=validateProfile(objIdentity||objPayload?.customer);
+ const objCustomer=validateProfile(objIdentity||objPayload?.customer,{bRequirePhone:Boolean(objIdentity)});
  const strPhoneDigits=objCustomer.phone.replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
  if(strPhoneDigits.length===10)objCustomer.phone=`(${strPhoneDigits.slice(0,3)}) ${strPhoneDigits.slice(3,6)}-${strPhoneDigits.slice(6)}`;
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(objPayload?.requestKey||''))fail(400,'Invalid checkout key.');
