@@ -28,18 +28,15 @@ def enqueue_receipt(objCursor, objReceipt):
 
 
 def enqueue_progress(objCursor, objOrder, strStatus, strEstimate=None):
-    objLabels = {
-        'order_confirmed': 'Your order is confirmed.',
-        'preparing_order': 'We are preparing your order.',
-        'cooking_order': 'Your order is cooking.',
-        'order_ready': 'Your order is ready for pickup!',
-        'completed': 'Your order has been picked up. Thank you!',
-        'estimate': 'Your estimated pickup time has been updated.',
-    }
+    # Keep intermediate progress, estimates and pickup completion on the tracker.
+    # The receipt already confirms creation; only readiness needs another email.
+    if strStatus != 'order_ready':
+        return
+    strLabel = 'Your order is ready for pickup!'
     strNumber = f"LP-{objOrder['id']}"
     strTracker = os.environ['SITE_URL'].rstrip('/') + '/track?token=' + objOrder['tracking_token']
-    strBody = f"Order {strNumber}\n{objLabels[strStatus]}\n"
+    strBody = f"Order {strNumber}\n{strLabel}\n"
     if strEstimate:
         strBody += f"Estimated pickup time (UTC): {strEstimate}\n"
     strBody += f"Track your order: {strTracker}"
-    enqueue_message(objCursor, objOrder['customer_email'], f"Luigi {strNumber}: {objLabels[strStatus]}", strBody)
+    enqueue_message(objCursor, objOrder['customer_email'], f"Luigi {strNumber}: {strLabel}", strBody)

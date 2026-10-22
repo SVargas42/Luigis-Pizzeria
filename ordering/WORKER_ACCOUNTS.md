@@ -26,7 +26,7 @@ Back up the database and deployed source first. Upload the changed files preserv
 
 The migration adds Worker to the accounts role enum and preserves existing customer/admin accounts. It requires the earlier account migrations to exist. For a new installation, apply schema and numbered migrations in order, including 007. Do not replace an existing database with a fresh schema.
 
-No new .env settings are required. Keep the existing database, internal-service, SMTP, and payment configuration private. The existing Node-to-lifecycle proxy supplies employee identity to preparation/pickup audit events. Pickup estimate emails use the existing lifecycle email queue.
+No new .env settings are required. Keep the existing database, internal-service, SMTP, and payment configuration private. The existing Node-to-lifecycle proxy supplies employee identity to preparation/pickup audit events. Order creation receipts and ready-for-pickup notices use the existing email queue. Other progress and pickup estimates appear on the tracker without additional emails.
 
 ## Verification
 

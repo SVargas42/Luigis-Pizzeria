@@ -242,7 +242,7 @@ def test_staff_auth_estimate_sequential_stale_and_archive(objHarness):
     assert objHarness[1].execute("SELECT COUNT(*) FROM order_events WHERE actor_email='owner@example.com'").fetchone()[0] == 5
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 409
     arrMessages = objHarness[1].execute('SELECT recipient,subject,message,purpose FROM account_mail').fetchall()
-    assert len(arrMessages) == 7  # receipt, changed estimate, four stages, completion
+    assert len(arrMessages) == 2  # creation receipt and ready-for-pickup notice only
     assert all(objMail['recipient'] == objReceipt['customer']['email'] for objMail in arrMessages)
     assert all(objMail['purpose'] == 'receipt' and objReceipt['trackerUrl'] in objMail['message'] for objMail in arrMessages)
     assert any('ready for pickup' in objMail['subject'] for objMail in arrMessages)
@@ -260,11 +260,13 @@ def test_order_and_notification_are_atomic(objHarness):
 def test_status_and_notification_are_atomic(objHarness):
     objClient, objConnection, _ = objHarness
     objReceipt = objClient.post('/api/orders', json=payload()).json()
-    objConnection.execute("CREATE TRIGGER reject_mail BEFORE INSERT ON account_mail BEGIN SELECT RAISE(ABORT,'forced queue failure'); END")
     objClient.auth = ('staff', 'test-password')
+    for nIndex in range(3):
+        assert objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/status", json={'expectedStatus':objModule.arrStages[nIndex],'status':objModule.arrStages[nIndex+1]}).status_code == 200
+    objConnection.execute("CREATE TRIGGER reject_mail BEFORE INSERT ON account_mail BEGIN SELECT RAISE(ABORT,'forced queue failure'); END")
     with pytest.raises(sqlite3.IntegrityError):
-        objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/status", json={'expectedStatus':'order_received','status':'order_confirmed'})
-    assert objConnection.execute('SELECT tracking_status FROM orders').fetchone()[0] == 'order_received'
+        objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/status", json={'expectedStatus':'cooking_order','status':'order_ready'})
+    assert objConnection.execute('SELECT tracking_status FROM orders').fetchone()[0] == 'cooking_order'
     assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
 
 

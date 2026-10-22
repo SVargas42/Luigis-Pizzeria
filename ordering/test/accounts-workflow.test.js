@@ -119,3 +119,20 @@ test('SMTP signup and durable outbox retry work without Resend credentials',asyn
  await deliverAccountMail(objStore.pool,objSmtpConfig);assert.equal(objStore.state.mail[0].attempts,1);assert.ok(objStore.state.mail[0].message);assert.equal(objStore.state.mail[0].sent_at,undefined);
  bFail=false;await deliverAccountMail(objStore.pool,objSmtpConfig);assert.equal(objStore.state.mail[0].attempts,2);assert.equal(objStore.state.mail[0].message,'');assert.ok(objStore.state.mail[0].sent_at);
 });
+
+test('new accounts receive a verification email through SMTP and cannot sign in before verifying',async objTest=>{
+ const objStore=createStore(),arrSent=[];
+ const objSmtpConfig={...objConfig,mailProvider:'smtp',mailKey:undefined,smtp:{host:'smtp.gmail.com',port:587,from:'sender@example.com',user:'sender@example.com',password:'test-password'}};
+ const objService=createAccountService(objStore.pool,objSmtpConfig);
+ objTest.mock.method(nodemailer,'createTransport',()=>({async sendMail(objMessage){arrSent.push(objMessage);return {accepted:[objProfile.email]};},close(){}}));
+ await objService.handle(request(),'/api/auth/register',objProfile);
+ assert.equal(objStore.state.mail.length,1);assert.equal(objStore.state.accounts[0].email_verified_at,null);
+ await assert.rejects(objService.handle(request(),'/api/auth/login',objProfile),objError=>objError.status===403);
+ const strToken=tokenFromMail(objStore.state.mail[0]);
+ await deliverAccountMail(objStore.pool,objSmtpConfig);
+ assert.equal(arrSent.length,1);assert.equal(arrSent[0].to,objProfile.email);assert.match(arrSent[0].subject,/Verify/);assert.ok(arrSent[0].text.includes('/account#action=verify&token='+strToken));
+ assert.ok(objStore.state.mail[0].sent_at);assert.equal(objStore.state.mail[0].message,'');
+ await objService.handle(request(),'/api/auth/verify',{token:strToken});
+ assert.equal((await objService.handle(request(),'/api/auth/login',objProfile)).status,200);
+ await assert.rejects(objService.handle(request(),'/api/auth/verify',{token:strToken}),objError=>objError.status===400);
+});
