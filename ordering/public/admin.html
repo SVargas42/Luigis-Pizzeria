@@ -65,7 +65,7 @@
     </section>
     <section class="panel" role="tabpanel" id="panel-menu" aria-labelledby="tab-menu" tabindex="0" hidden>
       <div class="toolbar"><div><h2>Menu and pricing</h2><p>Add or edit menu items. Removed items disappear from the customer menu; past orders stay unchanged.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
-      <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<select id="new-menu-category" required><option value="pizza">Pizza size</option><option value="topping">Topping</option><option value="side">Side</option><option value="drink_name">Drink</option><option value="drink">Drink size</option></select></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><label class="menu-description-field" for="new-menu-description">Description (optional)<textarea id="new-menu-description" maxlength="1000" rows="3"></textarea></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
+      <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<input id="new-menu-category" list="menu-category-options" value="Pizza size" maxlength="20" pattern="[A-Za-z][A-Za-z0-9 ]{0,19}" title="Use letters, numbers and spaces." required><datalist id="menu-category-options"><option value="Pizza size"></option><option value="Topping"></option><option value="Side"></option><option value="Drink"></option><option value="Drink size"></option></datalist></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><label class="menu-description-field" for="new-menu-description">Description (optional)<textarea id="new-menu-description" maxlength="1000" rows="3"></textarea></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
       <p class="hint">Drink names can have an optional price adjustment. Drink size prices apply to every drink.</p>
       <p class="sr-status" id="menu-message" role="status" aria-live="polite"></p>
       <label class="menu-filter" for="show-removed-menu"><input id="show-removed-menu" type="checkbox">Show removed items</label>
@@ -299,7 +299,22 @@
     const menuItemPath=objItem=>`/api/admin/menu/${objItem.category}/${encodeURIComponent(objItem.name)}`;
     const menuItemActive=objItem=>Number(objItem.is_active??1)===1;
 
+    function menuTypeLabel(strCategory) {
+      return objMenuLabels[strCategory] || strCategory.replace(/_/g, ' ')
+        .replace(/\b[a-z]/g, strLetter => strLetter.toUpperCase());
+    }
+    function menuCategoryKey(strLabel) {
+      const strClean = strLabel.trim().toLowerCase();
+      return Object.keys(objMenuLabels).find(
+        strKey => objMenuLabels[strKey].toLowerCase() === strClean
+      ) || strClean.replace(/ +/g, '_');
+    }
     function renderMenu(){
+      const objOptions=$('menu-category-options');objOptions.replaceChildren();
+      for(const strCategory of [...new Set([...Object.keys(objMenuLabels),...arrMenuRows.map(objItem=>objItem.category)])].sort()){
+        const objOption=document.createElement('option');objOption.value=menuTypeLabel(strCategory);
+        objOptions.append(objOption);
+      }
       const objBody=$('menu-rows');objBody.replaceChildren();mapMenuEditButtons.clear();
       const arrVisible=arrMenuRows.filter(objItem=>$('show-removed-menu').checked||menuItemActive(objItem));
       for(const objItem of arrVisible){
@@ -335,13 +350,13 @@
     }
     $('refresh-menu').addEventListener('click',loadMenu);
     $('show-removed-menu').addEventListener('change',renderMenu);
-    $('new-menu-category').addEventListener('change',()=>{$('new-menu-price').min=$('new-menu-category').value==='drink_name'?'0':'0.01';});
+    $('new-menu-category').addEventListener('input',()=>{$('new-menu-price').min=menuCategoryKey($('new-menu-category').value)==='drink_name'?'0':'0.01';});
     $('add-menu-form').addEventListener('submit',async objEvent=>{
       objEvent.preventDefault();const objButton=$('add-menu-item');
       if(objButton.disabled||!$('add-menu-form').reportValidity())return;
       objButton.disabled=true;$('menu-message').textContent='';
       try{
-        await api('/api/admin/menu',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:$('new-menu-category').value,name:$('new-menu-name').value,description:$('new-menu-description').value,priceCents:Math.round(Number($('new-menu-price').value)*100)})});
+        await api('/api/admin/menu',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:menuCategoryKey($('new-menu-category').value),name:$('new-menu-name').value,description:$('new-menu-description').value,priceCents:Math.round(Number($('new-menu-price').value)*100)})});
         $('new-menu-name').value='';$('new-menu-description').value='';$('new-menu-price').value='';
         await refreshMenuAfterChange('Menu item added.');$('new-menu-name').focus();
       }catch(objError){$('menu-message').textContent=objError.message;}
@@ -350,8 +365,9 @@
 
     function openMenuEdit(objItem,objTrigger){
       objEditingMenuItem={...objItem};objMenuEditTrigger=objTrigger;
-      $('menu-edit-title').textContent=`Edit ${objMenuLabels[objItem.category].toLowerCase()}`;
-      $('menu-edit-kind').textContent=`Current type: ${objMenuLabels[objItem.category]}`;
+      const strType=objMenuLabels[objItem.category]||objItem.category;
+      $('menu-edit-title').textContent=`Edit ${strType.toLowerCase()}`;
+      $('menu-edit-kind').textContent=`Current type: ${strType}`;
       $('edit-menu-name').value=objItem.name;$('edit-menu-description').value=objItem.description||'';
       $('edit-menu-price').value=(objItem.price_cents/100).toFixed(2);$('edit-menu-price').min=objItem.category==='drink_name'?'0':'0.01';
       $('menu-edit-message').textContent='';$('menu-edit-dialog').showModal();$('edit-menu-name').focus();
@@ -372,7 +388,7 @@
 
     function openMenuDelete(objItem,objTrigger){
       objDeletingMenuItem={...objItem};objMenuDeleteTrigger=objTrigger;bMenuDeleteConfirmed=false;
-      $('menu-delete-item').textContent=`${objItem.name} · ${objMenuLabels[objItem.category]}`;
+      $('menu-delete-item').textContent=`${objItem.name} · ${objMenuLabels[objItem.category]||objItem.category}`;
       $('menu-delete-phrase').textContent=`DELETE ${objItem.name}`;
       $('menu-delete-confirmation').value='';$('menu-delete-confirmation').disabled=true;
       $('menu-delete-confirmation').setCustomValidity('');$('menu-delete-confirmation').removeAttribute('aria-invalid');
@@ -414,6 +430,9 @@
       $('menu-delete-form').setAttribute('aria-busy','true');$('menu-delete-message').textContent='Removing item…';
       try{
         await api(menuItemPath(objItem),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:strConfirmation})});
+        const objRemovedItem=arrMenuRows.find(objRow=>objRow.category===objItem.category&&objRow.name===objItem.name);
+        if(objRemovedItem)objRemovedItem.is_active=0;
+        renderMenu();
         $('menu-delete-dialog').close();await refreshMenuAfterChange(`${objItem.name} removed from the menu. Past orders are unchanged.`);$('refresh-menu').focus();
       }catch(objError){$('menu-delete-message').textContent=objError.message;$('menu-delete-confirmation').disabled=false;$('menu-delete-confirmation').focus();}
       finally{

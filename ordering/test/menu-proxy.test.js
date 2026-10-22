@@ -84,3 +84,13 @@ test('menu proxy refuses remote or credential-bearing backend origins',()=>{
   assert.throws(()=>harness({lifecycleUrl:strUrl}),/loopback/);
  }
 });
+
+test('custom category operations preserve authorization and route validation',async()=>{
+ const objHarness=harness();
+ for(const strMethod of ['PATCH','DELETE']){
+  assert.equal((await objHarness.request(strMethod,'/api/admin/menu/dessert/Brownie',{confirmation:'DELETE Brownie'})).status,200);
+  assert.equal((await harness({resolveIdentity:async()=>({role:'customer'})}).request(strMethod,'/api/admin/menu/dessert/Brownie',{})).status,403);
+  assert.equal((await objHarness.request(strMethod,'/api/admin/menu/dessert/Brownie',{}, {origin:'https://other.example'})).status,403);
+ }
+ for(const strCategory of ['Bad','bad-type','x'.repeat(21)])assert.equal(await objHarness.request('DELETE','/api/admin/menu/'+strCategory+'/Brownie',{}),null);
+});

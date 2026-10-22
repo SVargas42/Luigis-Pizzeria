@@ -4,7 +4,7 @@ export function createMenuProxy({resolveIdentity:fnIdentity,readBody:fnReadBody,
  if(objBase.protocol!=='http:'||!['127.0.0.1','[::1]'].includes(objBase.hostname)||objBase.username||objBase.password||objBase.pathname!=='/'||objBase.search||objBase.hash)throw Error('Menu backend must use a loopback HTTP origin.');
  return async function forwardMenuRequest(objRequest,objUrl){
   const bCollection=objUrl.pathname==='/api/admin/menu';
-  const bItem=/^\/api\/admin\/menu\/(pizza|topping|side|drink|drink_name)\/[^/]+$/.test(objUrl.pathname);
+  const bItem=/^\/api\/admin\/menu\/[a-z][a-z0-9_]{0,19}\/[^/]+$/.test(objUrl.pathname);
   if(!bCollection&&!bItem)return null;
   const objIdentity=await fnIdentity(objRequest);
   if(objIdentity?.role!=='admin')return {status:403,data:{error:'Administrator account required.'}};

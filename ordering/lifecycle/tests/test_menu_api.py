@@ -9,6 +9,18 @@ from ordering.lifecycle.tests.test_lifecycle import objHarness, objModule, paylo
 objStaffAuth = ('staff', 'test-password')
 
 
+def test_custom_category_can_be_added_edited_and_soft_deleted(objHarness):
+    objClient, objConnection, _ = objHarness
+    objInput = {'category': 'dessert', 'name': 'Brownie', 'priceCents': 450}
+    assert objClient.post('/api/admin/menu', auth=objStaffAuth, json=objInput).status_code == 201
+    assert objClient.patch('/api/admin/menu/dessert/Brownie', auth=objStaffAuth,
+                           json={'name': 'Brownie', 'priceCents': 500}).status_code == 200
+    objResponse = objClient.request('DELETE', '/api/admin/menu/dessert/Brownie',
+                                    auth=objStaffAuth, json={'confirmation': 'DELETE Brownie'})
+    assert objResponse.status_code == 200
+    assert tuple(objConnection.execute("SELECT is_active,price_cents FROM menu_prices WHERE category='dessert'").fetchone()) == (0, 500)
+
+
 @pytest.mark.parametrize('strMethod,strPath,objInput', [
     ('GET', '/api/admin/menu', None),
     ('POST', '/api/admin/menu', {'category': 'side', 'name': 'Knots', 'priceCents': 700}),
@@ -85,7 +97,8 @@ def test_duplicates_inactive_targets_and_stale_names_are_rejected(objHarness):
 
 
 @pytest.mark.parametrize('objChange', [
-    {'category': 'unknown'}, {'name': 'Bad; DROP TABLE orders'}, {'name': 'x' * 61},
+    {'category': 'Bad category'}, {'category': 'x' * 21}, {'category': 'bad/type'},
+    {'category': ''}, {'name': 'Bad; DROP TABLE orders'}, {'name': 'x' * 61},
     {'description': 'x' * 1001}, {'description': 'bad\x00text'}, {'priceCents': -1},
     {'priceCents': 1000001}, {'priceCents': 12.5}, {'priceCents': True},
     {'priceCents': '700'}, {'priceCents': 0}, {'is_active': 0},

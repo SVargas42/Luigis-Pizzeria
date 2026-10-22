@@ -82,7 +82,7 @@ test('menu dashboard browser workflows and keyboard access',{skip:process.env.RU
     const objRemoved=objPage.getByRole('row').filter({has:objPage.getByText('Old Side',{exact:true})});
     assert.equal(await objRemoved.getByRole('button').count(),0);assert.equal(await objRemoved.getByText('Removed',{exact:true}).count(),1);
     const objAddForm=objPage.locator('#add-menu-form');
-    await objAddForm.getByLabel('Item type').selectOption('side');
+    await objAddForm.getByLabel('Item type').fill('Side');
     await objAddForm.getByLabel('Item name',{exact:true}).fill('Garlic Knots');
     await objAddForm.getByLabel('Description (optional)',{exact:true}).fill('<img src=x onerror="alert(1)"> Fresh garlic');
     await objAddForm.getByLabel('Price (dollars)',{exact:true}).fill('7.25');
@@ -160,14 +160,14 @@ test('menu dashboard browser workflows and keyboard access',{skip:process.env.RU
    const objPage=await openPage();
    try{
     const objForm=objPage.locator('#add-menu-form');
-    await objForm.getByLabel('Item type').selectOption('side');
+    await objForm.getByLabel('Item type').fill('Side');
     await objForm.getByLabel('Item name',{exact:true}).fill('Knots');
     for(const strPrice of ['0','1.005','10000.01']){
      await objForm.getByLabel('Price (dollars)',{exact:true}).fill(strPrice);
      await objPage.getByRole('button',{name:'Add item',exact:true}).click();
      assert.equal(arrWrites.length,0);
     }
-    await objForm.getByLabel('Item type').selectOption('drink_name');
+    await objForm.getByLabel('Item type').fill('Drink');
     await objForm.getByLabel('Item name',{exact:true}).fill('Lemon Soda');
     await objForm.getByLabel('Price (dollars)',{exact:true}).fill('0');
     await objPage.getByRole('button',{name:'Add item',exact:true}).click();

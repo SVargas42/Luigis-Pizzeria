@@ -5,7 +5,7 @@ import re
 import secrets
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import pymysql
@@ -13,7 +13,7 @@ from fastapi import Header, BackgroundTasks, Depends, FastAPI, HTTPException, Re
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
 from .order_mail import enqueue_receipt, enqueue_progress
 from .menu_queries import (
@@ -101,7 +101,8 @@ class Estimate(BaseModel):
         return dtValue.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-MenuCategory = Literal['pizza', 'topping', 'side', 'drink', 'drink_name']
+MenuCategory = Annotated[str, StringConstraints(min_length=1, max_length=20,
+                                              pattern=r'^[a-z][a-z0-9_]{0,19}$')]
 
 
 class MenuChange(BaseModel):
