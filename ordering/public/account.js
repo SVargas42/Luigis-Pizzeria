@@ -18,7 +18,7 @@ async function loadAccounts(){try{const arrAccounts=await api('/api/admin/accoun
 async function init(){
  try{
   const objSession=await api('/api/session');
-  if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';}
+  if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';if(objSession.user.role==='worker'){$('admin-link').hidden=false;$('admin-link').href='/staff';$('admin-link').textContent='Kitchen order queue';}}
   if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('management').hidden=false;$('title').textContent='Manage accounts';await loadAccounts();return;}
   if(strMode==='verify'){$('title').textContent='Verify email';announce((await api('/api/auth/verify',{token:strToken})).message);return;}
   if(!['login','register','forgot','resend','reset','invite','profile','password'].includes(strMode))throw Error('Choose a valid account action.');
@@ -69,7 +69,7 @@ $('account-form').onsubmit=async objEvent=>{
     return;
   }
   const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
-  if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:'/');}
+  if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/staff','/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:objResult.user?.role==='worker'?'/staff':'/');}
   else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
  }catch(objError){
   if (strMode === 'register') showRegistrationAlert('Unable to complete registration. Please retry.', false);

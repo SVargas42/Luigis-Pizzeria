@@ -143,7 +143,7 @@
     function setAuthState(objSession,bDemo=false){
       const objUser=objSession?.user||objSession;
       const bAuthenticated=Boolean(objSession?.authenticated??(objUser?.email&&objUser?.role));
-      objAuthState.user=bAuthenticated&&objUser&&['customer','admin'].includes(objUser.role)?{
+      objAuthState.user=bAuthenticated&&objUser&&['customer','worker','admin'].includes(objUser.role)?{
         id:objUser.id||objUser.email,email:String(objUser.email||''),firstName:String(objUser.firstName||''),lastName:String(objUser.lastName||''),phone:String(objUser.phone||''),role:objUser.role
       }:null;
       objAuthState.ready=Boolean(objSession?.authReady);
@@ -274,7 +274,7 @@
 
     function showHome(){ $('home-page').classList.remove('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');history.replaceState(null,'',location.pathname+location.search);$('home-title').focus({preventScroll:true});scrollToPageTop(); }
     function showOrders(){
-      if(objAuthState.user?.role==='admin'){location.href='/admin?tab=current';return;}
+      if(objAuthState.user?.role==='worker'){location.href='/staff';return;}if(objAuthState.user?.role==='admin'){location.href='/admin?tab=current';return;}
       $('home-page').classList.add('hidden');$('order-view').classList.add('hidden');$('order-hero').classList.add('hidden');$('orders-portal').classList.remove('hidden');$('customer-orders-panel').classList.add('hidden');$('customer-orders-error').textContent='';$('orders-title').focus({preventScroll:true});scrollToPageTop();
     }
     function startOrder(){ $('home-page').classList.add('hidden');$('orders-portal').classList.add('hidden');$('order-view').classList.remove('hidden');$('order-hero').classList.remove('hidden');goTo(canSkipContactDetails()?2:1);history.replaceState(null,'','#order'); }

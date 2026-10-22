@@ -117,14 +117,14 @@ export function createAccountService(objPool,objConfig){
   }
   if(objIdentity.role!=='admin')throw error(403,'Administrator access required.');
   if(strPath==='/api/admin/accounts/invite'){
-   requireMail();const objProfile=validateProfile(objInput);if(!['customer','admin'].includes(objInput.role))throw error(400,'Choose a supported role.');
+   requireMail();const objProfile=validateProfile(objInput);if(!['customer','worker','admin'].includes(objInput.role))throw error(400,'Choose a supported role.');
    const [objActor]=await objPool.query('SELECT password_hash FROM accounts WHERE id=?',[objIdentity.id]);await throttle(objRequest,objIdentity.email);if(!await verifyPassword(objInput.currentPassword,objActor.password_hash))throw error(401,'Confirm your current password.');
    await transaction(async objConnection=>{const objResult=await objConnection.query('INSERT INTO accounts(email,first_name,last_name,phone,role) VALUES(?,?,?,?,?)',[objProfile.email,objProfile.firstName,objProfile.lastName,objProfile.phone,objInput.role]);await enqueueAction(objConnection,{id:objResult.insertId,email:objProfile.email},'invite');await audit(objConnection,objIdentity.id,objResult.insertId,'invited');});
    return {status:201,data:{message:'Invitation queued. It expires in 60 minutes.'}};
   }
   if(strPath==='/api/admin/accounts/update'){
    const [objActor]=await objPool.query('SELECT password_hash FROM accounts WHERE id=?',[objIdentity.id]);await throttle(objRequest,objIdentity.email);if(!await verifyPassword(objInput.currentPassword,objActor.password_hash))throw error(401,'Confirm your current password.');
-   if(!/^\d+$/.test(String(objInput.id))||!['customer','admin'].includes(objInput.role)||typeof objInput.disabled!=='boolean')throw error(400,'Choose an account, role, and enabled status.');
+   if(!/^\d+$/.test(String(objInput.id))||!['customer','worker','admin'].includes(objInput.role)||typeof objInput.disabled!=='boolean')throw error(400,'Choose an account, role, and enabled status.');
    await transaction(async objConnection=>{
     // Lock the active admin set in a stable order so two admins cannot remove each other simultaneously.
     const arrAdmins=await objConnection.query("SELECT id FROM accounts WHERE role='admin' AND disabled_at IS NULL ORDER BY id FOR UPDATE");

@@ -29,6 +29,13 @@ test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
 
+test('worker Orders navigation opens the kitchen queue without revealing admin analytics',()=>{
+ const objHarness=createHarness();
+ vm.runInContext("setAuthState({authenticated:true,authReady:true,user:{id:'7',role:'worker',firstName:'Kitchen',lastName:'Worker',email:'worker@example.com',phone:'(555) 123-4567'}});showOrders();",objHarness.objContext);
+ assert.equal(objHarness.objContext.location.href,'/staff');
+ assert.equal(objHarness.mapElements.get('admin-analytics-link').classList.contains('hidden'),true);
+});
+
 test('checkout submits multiple distinct side selections as separate numeric quantities',async()=>{
  const objHarness=createHarness();
  vm.runInContext("state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}];",objHarness.objContext);
