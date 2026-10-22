@@ -215,7 +215,8 @@
         if(!arrOrders.length)objContainer.append(textElement('p',strBucket==='past'?'No completed or cancelled orders yet.':'No current orders. New orders will appear here.','empty'));
         else for(const objOrder of arrOrders)objContainer.append(renderOrder(objOrder,strBucket));
         announce(`${arrOrders.length} ${strBucket} order${arrOrders.length===1?'':'s'} loaded.`);
-      }catch(error){objContainer.append(textElement('p',error.message,'empty'));announce(error.message,true);}
+        return true;
+      }catch(error){objContainer.append(textElement('p',error.message,'empty'));announce(error.message,true);return false;}
     }
 
     async function changeStatus(objOrder,objButton,strStatus) {
@@ -275,7 +276,28 @@
         objEvent.preventDefault();arrTabs[nIndex].focus();setTab(arrTabs[nIndex]);
       });
     }
-    document.querySelectorAll('[data-refresh]').forEach(objButton=>objButton.addEventListener('click',()=>loadOrders(objButton.dataset.refresh)));
+    document.querySelectorAll('[data-refresh]').forEach(objButton => {
+      const strOriginalText = objButton.textContent;
+      let nFeedbackTimer;
+      objButton.setAttribute('aria-live', 'polite');
+      objButton.addEventListener('click', async () => {
+        if (objButton.disabled) return;
+        clearTimeout(nFeedbackTimer);
+        objButton.disabled = true;
+        objButton.setAttribute('aria-busy', 'true');
+        objButton.textContent = 'Refreshing...';
+        try {
+          const bSuccess = await loadOrders(objButton.dataset.refresh);
+          objButton.textContent = bSuccess ? 'Refreshed!' : 'Refresh failed';
+        } finally {
+          objButton.disabled = false;
+          objButton.removeAttribute('aria-busy');
+          nFeedbackTimer = setTimeout(() => {
+            objButton.textContent = strOriginalText;
+          }, 2500);
+        }
+      });
+    });
 
     async function loadCustomers() {
       try{

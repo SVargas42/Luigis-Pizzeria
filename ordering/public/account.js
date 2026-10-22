@@ -28,15 +28,28 @@ async function init(){
   const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
   $('profile-fields').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
   $('email-field').hidden=!bEmail;$('email').required=bEmail;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
-  $('confirm-password-field').hidden = strMode !== 'register';
-  $('confirmPassword').required = strMode === 'register';
+  const bConfirmPassword = ['register', 'reset'].includes(strMode);
+  $('confirm-password-field').hidden = !bConfirmPassword;
+  $('confirmPassword').required = bConfirmPassword;
+  $('confirm-password-label').textContent = strMode === 'reset' ? 'Confirm New Password' : 'Confirm Password';
   $('current-field').hidden=strMode!=='password';$('currentPassword').required=strMode==='password';
   $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Email changes require restaurant support.':'Use the email address associated with your account.';
+  if (strMode === 'reset') $('instructions').textContent = 'Enter your new password below.';
   if(strMode==='profile')for(const strId of ['firstName','lastName','phone'])$(strId).value=strId==='phone'?normalizePhone(objSession.user.phone):objSession.user[strId];
  }catch(objError){announce(objError.message);}
 }
 $('account-form').onsubmit=async objEvent=>{
  objEvent.preventDefault();
+ if (strMode === 'reset') {
+  const objAlert = $('reset-alert');
+  objAlert.className = 'alert d-none';
+  if ($('password').value !== $('confirmPassword').value) {
+   objAlert.textContent = 'Passwords do not match.';
+   objAlert.className = 'alert alert-danger';
+   objAlert.focus();
+   return;
+  }
+ }
  if (strMode === 'register' && $('password').value !== $('confirmPassword').value) {
   showRegistrationAlert('Passwords do not match.', false);
   $('register-alert').textContent = 'Passwords do not match.';
@@ -69,6 +82,7 @@ $('account-form').onsubmit=async objEvent=>{
     return;
   }
   const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
+  if (strMode === 'reset') $('confirmPassword').value = '';
   if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/staff','/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:objResult.user?.role==='worker'?'/staff':'/');}
   else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
  }catch(objError){
