@@ -12,7 +12,12 @@ export function checkEnvironment(objEnv,{bLocal=false}={}){
  if(!bLocal&&objEnv.TRUST_PROXY_LOOPBACK!=='1')arrErrors.push('TRUST_PROXY_LOOPBACK: use 1 with the supplied same-VM Nginx proxy.');
  if(!/^\d+$/.test(objEnv.TAX_BASIS_POINTS||'')||Number(objEnv.TAX_BASIS_POINTS)>10000)arrErrors.push('TAX_BASIS_POINTS: use an integer from 0 to 10000; confirm the business tax setting.');
  if(!bLocal){
-  for(const strKey of ['RESEND_API_KEY','ACCOUNT_MAIL_FROM','SMTP_HOST','SMTP_PORT','SMTP_FROM','SMTP_USER','SMTP_PASSWORD'])if(!isValue(strKey))arrErrors.push(`${strKey}: configure real email delivery before public release.`);
+  const strProvider=objEnv.MAIL_PROVIDER||'resend';
+  if(!['smtp','resend'].includes(strProvider))arrErrors.push('MAIL_PROVIDER: choose smtp or resend.');
+  const arrMailKeys=['ACCOUNT_MAIL_FROM','SMTP_HOST','SMTP_PORT','SMTP_FROM','SMTP_USER','SMTP_PASSWORD',...(strProvider==='resend'?['RESEND_API_KEY']:[])];
+  for(const strKey of arrMailKeys)if(!isValue(strKey))arrErrors.push(`${strKey}: configure real email delivery before public release.`);
+  if(objEnv.SMTP_PORT!=='587')arrErrors.push('SMTP_PORT: use 587; pickup receipts require STARTTLS.');
+  if(strProvider==='smtp'&&objEnv.SMTP_HOST==='smtp.gmail.com')for(const strKey of ['ACCOUNT_MAIL_FROM','SMTP_FROM'])if(!objEnv[strKey]?.toLowerCase().includes(objEnv.SMTP_USER?.toLowerCase()||'\u0000'))arrErrors.push(`${strKey}: Gmail sender must match SMTP_USER.`);
   for(const strKey of ['DB_PASSWORD','ADMIN_PASSWORD'])if(isValue(strKey)&&objEnv[strKey].length<24)arrErrors.push(`${strKey}: use a newly generated secret of at least 24 characters.`);
   if(objEnv.DB_PASSWORD&&objEnv.DB_PASSWORD===objEnv.ADMIN_PASSWORD)arrErrors.push('ADMIN_PASSWORD: use a different secret from DB_PASSWORD.');
  }

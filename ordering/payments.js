@@ -7,6 +7,8 @@ const fail=(nStatus,strMessage)=>{throw Object.assign(new Error(strMessage),{sta
 function hasToken(strToken){return typeof strToken==='string'&&/^[a-f0-9]{64}$/.test(strToken);}
 export function canonicalCheckout(objPayload,objIdentity){
  const objCustomer=validateProfile(objIdentity||objPayload?.customer);
+ const strPhoneDigits=objCustomer.phone.replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
+ if(strPhoneDigits.length===10)objCustomer.phone=`(${strPhoneDigits.slice(0,3)}) ${strPhoneDigits.slice(3,6)}-${strPhoneDigits.slice(6)}`;
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(objPayload?.requestKey||''))fail(400,'Invalid checkout key.');
  if(!hasToken(objPayload.checkoutToken))fail(400,'Invalid checkout access token.');
  for(const strKey of ['pizzas','sides','drinks'])if(!Array.isArray(objPayload[strKey])||objPayload[strKey].length>20)fail(400,'Invalid order selections.');
@@ -60,7 +62,11 @@ export function createPaymentService(objPool,objStripe,objConfig){
  async function attachSession(objPayment){
   if(objPayment.stripe_session_id)return objStripe.checkout.sessions.retrieve(objPayment.stripe_session_id);
   if(new Date(objPayment.expires_at).getTime()<=Date.now())fail(410,'Checkout expired. Start a new order.');
-  const objSession=await objStripe.checkout.sessions.create(parseJson(objPayment.params_json),{idempotencyKey:'luigi-checkout-'+objPayment.id});
+  // Older pending quotes can still contain the retired parameter. Preserve their
+  // quote and idempotency key while using Dashboard-managed payment methods.
+  const objParams={...parseJson(objPayment.params_json)};
+  delete objParams.payment_method_types;
+  const objSession=await objStripe.checkout.sessions.create(objParams,{idempotencyKey:'luigi-checkout-'+objPayment.id});
   await objPool.query("UPDATE stripe_payments SET stripe_session_id=?,state=IF(order_id IS NULL,'open',state) WHERE id=? AND (stripe_session_id IS NULL OR stripe_session_id=?)",[objSession.id,objPayment.id,objSession.id]);
   return objSession;
  }
@@ -73,7 +79,7 @@ export function createPaymentService(objPool,objStripe,objConfig){
    const arrMenu=await objPool.query('SELECT category,name,price_cents FROM menu_prices WHERE is_active = 1');
    const objQuote=makeQuote(objCanonical,new Map(arrMenu.map(objRow=>[`${objRow.category}:${objRow.name}`,Number(objRow.price_cents)])),objConfig.taxBasisPoints);
    const strId=randomUUID(),nExpires=Math.floor(Date.now()/1000)+3600;
-   const objParams={mode:'payment',payment_method_types:['card'],customer_email:objQuote.customer.email,client_reference_id:strId,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey},payment_intent_data:{receipt_email:objQuote.customer.email,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey}},success_url:`${strOrigin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${strOrigin}/?checkout=cancelled`,expires_at:nExpires,line_items:objQuote.items.map(objItem=>({price_data:{currency:'usd',unit_amount:objItem.unit,product_data:{name:objItem.description}},quantity:objItem.quantity}))};
+   const objParams={mode:'payment',customer_email:objQuote.customer.email,client_reference_id:strId,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey},payment_intent_data:{receipt_email:objQuote.customer.email,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey}},success_url:`${strOrigin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${strOrigin}/?checkout=cancelled`,expires_at:nExpires,line_items:objQuote.items.map(objItem=>({price_data:{currency:'usd',unit_amount:objItem.unit,product_data:{name:objItem.description}},quantity:objItem.quantity}))};
    if(objQuote.taxCents)objParams.line_items.push({price_data:{currency:'usd',unit_amount:objQuote.taxCents,product_data:{name:'Order tax'}},quantity:1});
    await transaction(async objConnection=>{
     await objConnection.query("INSERT INTO stripe_payments(id,request_key,account_id,access_token_hash,input_hash,quote_json,params_json,expires_at) VALUES(?,?,?,?,?,?,?,TIMESTAMPADD(SECOND,?,'1970-01-01 00:00:00')) ON DUPLICATE KEY UPDATE request_key=request_key",[strId,objCanonical.requestKey,objIdentity?.id||null,digest(objPayload.checkoutToken),strInputHash,JSON.stringify(objQuote),JSON.stringify(objParams),nExpires]);

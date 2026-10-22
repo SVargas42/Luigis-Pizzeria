@@ -18,6 +18,11 @@ test('environment merge preserves existing secrets and appends each missing name
  const strAppend=mergeEnvironment(strExisting,strExample);assert.match(strAppend,/STRIPE_ENABLED=0/);assert.doesNotMatch(strAppend,/DB_PASSWORD|SITE_URL|keep-this-value/);
  assert.equal(mergeEnvironment(strExisting+strAppend,strExample),'');
 });
+
+test('Gmail production configuration does not require Resend and rejects a mismatched sender',()=>{
+ const objEnv={...configuration(),MAIL_PROVIDER:'smtp',RESEND_API_KEY:'',SMTP_HOST:'smtp.gmail.com',SMTP_USER:'sender@example.com',SMTP_FROM:'sender@example.com',ACCOUNT_MAIL_FROM:'Luigi <sender@example.com>'};
+ assert.deepEqual(checkEnvironment(objEnv),[]);assert.ok(checkEnvironment({...objEnv,SMTP_PASSWORD:''}).some(strError=>strError.startsWith('SMTP_PASSWORD:')));assert.ok(checkEnvironment({...objEnv,ACCOUNT_MAIL_FROM:'someone@example.com'}).some(strError=>strError.startsWith('ACCOUNT_MAIL_FROM:')));
+});
 test('systemd services share the private env and use a non-root account with private Python listener',()=>{
  const objUnits=renderServices('/home/operator/Luigis-Pizzeria','/home/operator/.nvm/versions/node/v24.0.0/bin/node','operator');
  for(const strUnit of Object.values(objUnits)){assert.match(strUnit,/User=operator\n/);assert.match(strUnit,/EnvironmentFile=\/home\/operator\/Luigis-Pizzeria\/ordering\/\.env/);assert.match(strUnit,/Restart=on-failure/);assert.doesNotMatch(strUnit,/DB_PASSWORD|ADMIN_PASSWORD/);}

@@ -7,6 +7,7 @@ import {normalizeEditableItems,validateOrder} from './validation.js';
 import {canTransitionStatus,orderAttention} from './domain.js';
 import {identityIsConfigured,resolveIdentity} from './identity.js';
 import {createAccountService,deliverAccountMail} from './accounts.js';
+import {mailConfigFromEnvironment} from './mail.js';
 import {setIdentityResolver} from './identity.js';
 import {loadAnalytics} from './analytics.js';
 import {requiresStaffAuthentication} from './admin-access.js';
@@ -16,7 +17,7 @@ for (const key of ['DB_PASSWORD','SITE_URL']) {
  if (!process.env[key] || /replace-|PUT_YOUR|CHOOSE_A|YOUR_/i.test(process.env[key])) throw new Error(`Set ${key} in .env before starting.`);
 }
 const pool = mariadb.createPool({host:process.env.DB_HOST || '127.0.0.1',port:Number(process.env.DB_PORT || 3306),user:process.env.DB_USER || 'luigis_app',password:process.env.DB_PASSWORD,database:process.env.DB_NAME || 'luigis',connectionLimit:10,bigIntAsNumber:true,timezone:'Z',initSql:"SET time_zone = '+00:00'"});
-const objAccountConfig={siteUrl:process.env.SITE_URL,mailKey:process.env.RESEND_API_KEY,mailFrom:process.env.ACCOUNT_MAIL_FROM,trustLoopbackProxy:process.env.TRUST_PROXY_LOOPBACK==='1'};
+const objAccountConfig={siteUrl:process.env.SITE_URL,...mailConfigFromEnvironment(process.env),trustLoopbackProxy:process.env.TRUST_PROXY_LOOPBACK==='1'};
 const objAccounts=createAccountService(pool,objAccountConfig);
 setIdentityResolver(objRequest=>objAccounts.identity(objRequest));
 let bMailWorkerBusy=false;

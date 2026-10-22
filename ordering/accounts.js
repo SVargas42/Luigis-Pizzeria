@@ -1,6 +1,7 @@
 import {randomBytes,randomUUID,createHash,scrypt as deriveKey,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
 import {isIP} from 'node:net';
+import {mailIsConfigured,sendAccountMessage} from './mail.js';
 const derivePassword=promisify(deriveKey);
 export function digestToken(strToken){return createHash('sha256').update(strToken).digest('hex');}
 function error(nStatus,strMessage){return Object.assign(new Error(strMessage),{status:nStatus});}
@@ -46,7 +47,7 @@ export function createAccountService(objPool,objConfig){
    const [objBucket]=await objPool.query('SELECT attempts FROM account_throttles WHERE bucket=?',[strBucket]);if(Number(objBucket.attempts)>nLimit)throw error(429,'Too many attempts. Please try again in 15 minutes.');
   }
  }
- function requireMail(){if(!objConfig.mailKey||!objConfig.mailFrom)throw error(503,'Account email delivery is not configured. Please contact the restaurant.');}
+ function requireMail(){if(!mailIsConfigured(objConfig))throw error(503,'Account email delivery is not configured. Please contact the restaurant.');}
  async function enqueueAction(objConnection,objAccount,strPurpose){
   const strToken=randomBytes(32).toString('hex');
   await objConnection.query('DELETE FROM account_actions WHERE account_id=? AND purpose=?',[objAccount.id,strPurpose]);
@@ -148,10 +149,10 @@ export function createAccountService(objPool,objConfig){
  return {identity,handle,claimOrder,limitCheckout:(objRequest,strEmail)=>throttle(objRequest,'checkout:'+String(strEmail)),async listAccounts(){return objPool.query('SELECT id,email,first_name,last_name,phone,role,email_verified_at,disabled_at,created_at FROM accounts ORDER BY id DESC LIMIT 200');}};
 }
 export async function deliverAccountMail(objPool,objConfig){
- if(!objConfig.mailKey||!objConfig.mailFrom)return;
+ if(!mailIsConfigured(objConfig))return;
  const objConnection=await objPool.getConnection();
  try{await objConnection.beginTransaction();const [objMail]=await objConnection.query("SELECT * FROM account_mail WHERE sent_at IS NULL AND (purpose='receipt' OR created_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 60 MINUTE)) AND next_attempt_at<=UTC_TIMESTAMP() AND attempts<10 ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED");if(!objMail){await objConnection.commit();return;}
-  try{const objResponse=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${objConfig.mailKey}`,'Content-Type':'application/json','Idempotency-Key':objMail.id},body:JSON.stringify({from:objConfig.mailFrom,to:[objMail.recipient],subject:objMail.subject,text:objMail.message}),signal:AbortSignal.timeout(10000)});if(!objResponse.ok)throw Error('Email provider failed');await objConnection.query("UPDATE account_mail SET sent_at=UTC_TIMESTAMP(),message='',attempts=attempts+1 WHERE id=?",[objMail.id]);}
+  try{await sendAccountMessage(objConfig,objMail);await objConnection.query("UPDATE account_mail SET sent_at=UTC_TIMESTAMP(),message='',attempts=attempts+1 WHERE id=?",[objMail.id]);}
   catch{await objConnection.query('UPDATE account_mail SET attempts=attempts+1,next_attempt_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 5 MINUTE) WHERE id=?',[objMail.id]);}
   await objConnection.commit();
  }catch(objError){await objConnection.rollback();throw objError;}finally{objConnection.release();}

@@ -5,6 +5,13 @@ import Stripe from 'stripe';
 import {createPaymentService,makeQuote,canonicalCheckout,verifyPaidSession} from '../payments.js';
 import {paymentStore} from './payment-store.js';
 const objStripeSdk=new Stripe('sk_test_unit_only');
+test('checkout normalizes existing US account phone formats before order validation',()=>{
+ const objInput={requestKey:randomUUID(),checkoutToken:'a'.repeat(64),customer:{firstName:'Ada',lastName:'Customer',email:'ada@example.com',phone:'5551234567'},pizzas:[{size:'Small',toppings:[]}],sides:[],drinks:[]};
+ for(const strPhone of ['5551234567','+1 (555) 123-4567','(555) 123-4567']){
+  const objCanonical=canonicalCheckout({...objInput,customer:{...objInput.customer,phone:strPhone}},null);
+  assert.equal(objCanonical.customer.phone,'(555) 123-4567');assert.equal(makeQuote(objCanonical,new Map([['pizza:Small',1000]]),0).totalCents,1000);
+ }
+});
 function harness(){
  const objStore=paymentStore(),mapSessions=new Map(),mapKeys=new Map();let nCalls=0,nRefunded=0;
  const objStripe={webhooks:objStripeSdk.webhooks,checkout:{sessions:{async create(objParams,objOptions){nCalls++;if(mapKeys.has(objOptions.idempotencyKey))return structuredClone(mapSessions.get(mapKeys.get(objOptions.idempotencyKey)));const strId='cs_test_'+(mapSessions.size+1),objSession={id:strId,metadata:objParams.metadata,client_reference_id:objParams.client_reference_id,currency:'usd',mode:'payment',status:'open',payment_status:'unpaid',livemode:false,payment_intent:null,amount_total:objParams.line_items.reduce((nSum,objLine)=>nSum+objLine.price_data.unit_amount*objLine.quantity,0),url:'https://checkout.stripe.com/c/pay/'+strId};mapSessions.set(strId,objSession);mapKeys.set(objOptions.idempotencyKey,strId);return structuredClone(objSession);},async retrieve(strId){return structuredClone(mapSessions.get(strId));}}},paymentIntents:{async retrieve(){return {metadata:{integration:'luigi-checkout-v2',payment_id:objStore.state.payments[0].id},latest_charge:'ch_test1'};}},charges:{async retrieve(){return {currency:'usd',amount:JSON.parse(objStore.state.payments[0].quote_json).totalCents,amount_refunded:nRefunded};}}};
@@ -14,6 +21,36 @@ function harness(){
  async function event(strType,objObject,objOverrides={}){const strPayload=JSON.stringify({id:'evt_'+randomUUID(),type:strType,livemode:false,data:{object:objObject},...objOverrides});const strSignature=objStripeSdk.webhooks.generateTestHeaderString({payload:strPayload,secret:'whsec_unit_secret'});return objService.webhook(Buffer.from(strPayload),strSignature);}
  return {objStore,objService,objInput,objStripe,mapSessions,paid,event,setRefunded(nValue){nRefunded=nValue},get calls(){return nCalls}};
 }
+
+test('new checkout uses Dashboard payment methods without the retired parameter',async()=>{
+ const objHarness=harness(),fnCreate=objHarness.objStripe.checkout.sessions.create;
+ objHarness.objStripe.checkout.sessions.create=async(objParams,objOptions)=>{
+  assert.equal(Object.hasOwn(objParams,'payment_method_types'),false);
+  return fnCreate(objParams,objOptions);
+ };
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ assert.equal(Object.hasOwn(JSON.parse(objHarness.objStore.state.payments[0].params_json),'payment_method_types'),false);
+});
+
+test('retry of a legacy quote removes the retired parameter and retains payment identity and price',async()=>{
+ const objHarness=harness(),fnCreate=objHarness.objStripe.checkout.sessions.create;
+ objHarness.objStripe.checkout.sessions.create=async()=>{throw Error('Simulated rejected request');};
+ await assert.rejects(objHarness.objService.createCheckout(objHarness.objInput,null));
+ const objPayment=objHarness.objStore.state.payments[0],strOriginalQuote=objPayment.quote_json;
+ const objLegacyParams={...JSON.parse(objPayment.params_json),payment_method_types:['card']};
+ objPayment.params_json=JSON.stringify(objLegacyParams);
+ objHarness.objStripe.checkout.sessions.create=async(objParams,objOptions)=>{
+  assert.equal(Object.hasOwn(objParams,'payment_method_types'),false);
+  assert.equal(objOptions.idempotencyKey,'luigi-checkout-'+objPayment.id);
+  assert.equal(objParams.client_reference_id,objPayment.id);
+  return fnCreate(objParams,objOptions);
+ };
+ const objResult=await objHarness.objService.createCheckout(objHarness.objInput,null);
+ assert.equal(objResult.state,'open');assert.equal(objResult.totalCents,1245);
+ assert.equal(objHarness.objStore.state.payments.length,1);
+ assert.equal(objPayment.quote_json,strOriginalQuote);
+ assert.equal(objHarness.objStore.state.orders.length,0);
+});
 test('inactive menu choices cannot create Stripe sessions',async()=>{
  for(const strKey of ['pizza:Small','topping:Cheese']){
   const objHarness=harness();objHarness.objStore.setInactiveMenu.add(strKey);
