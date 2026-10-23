@@ -25,7 +25,9 @@ test('all suite pages share one header stylesheet and each hub card has an image
  assert.match(strHeaderCss,/min-height:116px/);
  assert.match(strHeaderCss,/Georgia,serif/);
  assert.equal((strManagement.match(/class="workspace-image"/g)||[]).length,4);
- assert.equal((strManagement.match(/alt="" aria-hidden="true"/g)||[]).length,4);
+ assert.equal((strManagement.match(/<img class="workspace-image"/g)||[]).length,3);
+ assert.ok(strManagement.includes('<svg class="workspace-image"'));
+ for(const strLabel of ['Customer accounts','CUSTOMER','EMAIL','STATUS','Verified','+ Invite account'])assert.ok(strManagement.includes(strLabel));
 });
 
 test('menu editor is only reachable from its own page and Orders keeps its own tabs',()=>{
