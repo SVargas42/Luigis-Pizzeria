@@ -18,6 +18,8 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
  assert.ok(!strHtml.includes('id="tab-menu"'));
  assert.ok(strHtml.includes("location.pathname==='/admin/menu'"));
  assert.ok(strHtml.includes("if(bMenuPage)loadMenu();else setTab(objInitialTab)"));
+ assert.ok(strScript.includes("$('panel-menu').hidden=!bMenuPage"));
+ assert.ok(strScript.includes("$('panel-menu').classList.toggle('active',bMenuPage)"));
  assert.ok(strHtml.includes('id="edit-items-editor"'));
  assert.ok(!strHtml.includes('id="edit-items"'));
  assert.ok(!strHtml.includes('Accessible comparison values'));

@@ -26,7 +26,7 @@
   </style>
 </head>
 <body>
-  <header><span aria-hidden="true"></span><div class="staff-heading"><h1 id="staff-title">Luigi’s Order Desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Page navigation"><a id="go-back" href="/admin/management">Go back</a><a href="/">Return to Home</a></nav></header>
+  <header><span aria-hidden="true"></span><div class="staff-heading"><h1 id="staff-title">Luigi’s Order Desk</h1><p class="intro" id="staff-subtitle">Orders and business insights</p></div><nav class="page-links" aria-label="Page navigation"><a id="go-back" href="/admin/management">Go back</a><a href="/">Return to Home</a></nav></header>
   <main>
     <p class="message" id="message" role="status" aria-live="polite"></p>
     <div class="tabs" id="orders-tabs" role="tablist" aria-label="Order workspace">
@@ -70,7 +70,7 @@
       <form class="search-row" id="search"><label for="query">Search customers</label><input id="query" maxlength="100" autocomplete="off" placeholder="Email or last name"><button class="btn btn-primary" type="submit">Search</button></form>
       <div class="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Orders</th><th scope="col">Order value</th><th scope="col">Last order</th></tr></thead><tbody id="customers"></tbody></table></div>
     </section>
-    <section class="panel" id="panel-menu" aria-labelledby="menu-page-heading" tabindex="0" hidden>
+    <section class="panel" id="panel-menu" role="region" aria-labelledby="menu-page-heading" tabindex="0" hidden>
       <div class="toolbar"><div><h2 id="menu-page-heading">Menu</h2><p>Add or edit menu items. Removed items disappear from the customer menu; past orders stay unchanged.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
       <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<input id="new-menu-category" list="menu-category-options" value="Pizza size" maxlength="20" pattern="[A-Za-z][A-Za-z0-9 ]{0,19}" title="Use letters, numbers and spaces." required><datalist id="menu-category-options"><option value="Pizza size"></option><option value="Topping"></option><option value="Side"></option><option value="Drink"></option><option value="Drink size"></option></datalist></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><label class="menu-description-field" for="new-menu-description">Description (optional)<textarea id="new-menu-description" maxlength="1000" rows="3"></textarea></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
       <p class="hint">Drink names can have an optional price adjustment. Drink size prices apply to every drink.</p>
@@ -98,6 +98,7 @@
     const objDemoState=bDemoMode?createDemoAdminState():null;
     const objPageQuery=new URLSearchParams(location.search);
     $('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':bMenuPage?'Luigi’s Menu':'Luigi’s Order Desk';
+    $('staff-subtitle').textContent=bMenuPage?'Update menu items and pricing':'Orders and business insights';
     $('orders-tabs').hidden=!bOrdersPage;
     $('analytics-tabs').hidden=!bAnalyticsPage;
     for(const objPanel of document.querySelectorAll('[role="tabpanel"]')){
@@ -107,6 +108,8 @@
       objPanel.hidden=!bPageMatch;
       objPanel.classList.toggle('active',bPageMatch&&objPanel.id===(bAnalyticsPage?'panel-ordering':bMenuPage?'panel-menu':'panel-current'));
     }
+    $('panel-menu').hidden=!bMenuPage;
+    $('panel-menu').classList.toggle('active',bMenuPage);
     const objStatusLabels = {order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Preparing',cooking_order:'Cooking',order_ready:'Ready',received:'Order received',preparing:'In the oven',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
     const objNextStatuses = {order_received:['order_confirmed'],order_confirmed:['preparing_order'],preparing_order:['cooking_order'],cooking_order:['order_ready'],order_ready:['completed'],received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
     let bOrderUpdatesPaused=false;

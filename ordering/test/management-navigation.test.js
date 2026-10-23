@@ -22,7 +22,8 @@ test('menu editor is only reachable from its own page and Orders keeps its own t
  assert.ok(strAdmin.includes("const bMenuPage=location.pathname==='/admin/menu'"));
  assert.ok(strAdmin.includes("if(bMenuPage)loadMenu();else setTab(objInitialTab)"));
  assert.ok(!strAdmin.includes('id="tab-menu"'));
- assert.ok(strAdmin.includes('id="panel-menu"'));
+ assert.ok(strAdmin.includes('id="panel-menu" role="region"'));
+ assert.ok(strAdmin.includes("$('panel-menu').hidden=!bMenuPage"));
  assert.ok(strAdmin.includes('id="tab-current"')&&strAdmin.includes('id="tab-past"'));
 });
 
