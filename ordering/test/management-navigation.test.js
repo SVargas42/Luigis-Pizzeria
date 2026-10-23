@@ -10,6 +10,7 @@ const strAccount=readFileSync(new URL('../public/account.html',import.meta.url),
 const strAccountScript=readFileSync(new URL('../public/account.js',import.meta.url),'utf8');
 const strManagement=readFileSync(new URL('../public/management.html',import.meta.url),'utf8');
 const strHeaderCss=readFileSync(new URL('../public/management-header.css',import.meta.url),'utf8');
+const bufManageAccountsPhoto=readFileSync(new URL('../public/images/manage-accounts-photo.jpg',import.meta.url));
 
 test('admin homepage link opens Management Settings and every workspace has a server route',()=>{
  assert.match(strHome,/id="admin-analytics-link" href="\/admin\/management">Management Settings<\/a>/);
@@ -17,6 +18,9 @@ test('admin homepage link opens Management Settings and every workspace has a se
   assert.ok(strServer.includes(`'${strPath}':'${strPage}'`),`${strPath} should resolve to ${strPage}`);
  }
  assert.ok(strServer.includes("url.pathname==='/management-header.css'"));
+ assert.ok(strServer.includes("url.pathname==='/images/manage-accounts-photo.jpg'"));
+ assert.ok(strServer.includes("'Content-Type':'image/jpeg'"));
+ assert.deepEqual([...bufManageAccountsPhoto.subarray(0,3)],[0xff,0xd8,0xff]);
  for(const strHref of ['/admin/analytics','/admin','/admin/accounts','/admin/menu'])assert.ok(strManagement.includes(`href="${strHref}"`));
 });
 
