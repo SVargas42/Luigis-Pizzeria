@@ -151,9 +151,10 @@ test('signed-in customers also require secure card checkout',async()=>{
  assert.doesNotMatch(strHtml,/Pay at Pickup|payment-method/);
 });
 
-test('signed-in header places the red Place an Order action before account settings',()=>{
+test('signed-in header keeps Luigi’s Pizza to the left of the Orders action',()=>{
  const strControls=strHtml.match(/<nav class="account-controls"[^>]*>([\s\S]*?)<\/nav>/)?.[1]||'';
- assert.match(strControls,/<button class="btn btn-primary hidden" type="button" id="orders-button">Place an Order<\/button>/);
+ assert.match(strControls,/<button class="btn btn-primary hidden" type="button" id="orders-button">Orders<\/button>/);
+ assert.ok(strHtml.indexOf('id="home-link"')<strHtml.indexOf('id="orders-button"'));
  assert.ok(strControls.indexOf('id="orders-button"')<strControls.indexOf('id="account-settings"'));
 });
 test('breadsticks are a simple side without size controls',()=>{assert.doesNotMatch(strHtml,/id="breadstick-size"/);assert.match(strScript,/side\.quantity=Number\(input\.value\)/);});
