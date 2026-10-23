@@ -155,6 +155,7 @@ test('signed-in header keeps Luigi’s Pizza to the left of the Orders action',(
  const strControls=strHtml.match(/<nav class="account-controls"[^>]*>([\s\S]*?)<\/nav>/)?.[1]||'';
  assert.match(strControls,/<button class="btn btn-primary hidden" type="button" id="orders-button">Orders<\/button>/);
  assert.ok(strHtml.indexOf('id="home-link"')<strHtml.indexOf('id="orders-button"'));
+ assert.ok(strControls.indexOf('id="account-name"')<strControls.indexOf('id="orders-button"'));
  assert.ok(strControls.indexOf('id="orders-button"')<strControls.indexOf('id="account-settings"'));
 });
 test('breadsticks are a simple side without size controls',()=>{assert.doesNotMatch(strHtml,/id="breadstick-size"/);assert.match(strScript,/side\.quantity=Number\(input\.value\)/);});
