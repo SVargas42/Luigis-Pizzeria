@@ -22,7 +22,7 @@
     .staff-heading{grid-column:2;grid-row:1;text-align:center}
     .staff-heading .intro{margin:7px 0 0}
     .page-links{grid-column:3;grid-row:1;justify-content:flex-end}
-    #ordering-average,#ordering-forecast{grid-column:1/-1}
+    #ordering-average{grid-column:1/-1}
     @media(max-width:760px){header{grid-template-columns:1fr;justify-items:center}.admin-header-links,.staff-heading,.page-links{grid-column:1;grid-row:auto;justify-content:center;text-align:center}}
   </style>
 </head>
@@ -51,7 +51,7 @@
     </section>
     <section class="panel" role="tabpanel" id="panel-ordering" aria-labelledby="tab-ordering" tabindex="0" hidden>
       <div class="toolbar"><div><h2>Ordering Analytics</h2><p>Compare sales patterns across separate, date-aligned views.</p></div></div>
-      <div class="analytics-grid"><div class="chart-box" id="ordering-today"></div><div class="chart-box" id="ordering-comparison"></div><div class="chart-box" id="ordering-weekdays"></div><div class="chart-box" id="ordering-monthly"></div><div class="chart-box" id="ordering-average"></div><div class="chart-box" id="ordering-forecast"></div></div>
+      <div class="analytics-grid"><div class="chart-box" id="ordering-today"></div><div class="chart-box" id="ordering-comparison"></div><div class="chart-box" id="ordering-weekdays"></div><div class="chart-box" id="ordering-monthly"></div><div class="chart-box" id="ordering-average"></div></div>
       <section class="chart-box mt-3" aria-labelledby="product-comparison-title"><h3 id="product-comparison-title">Compare menu items</h3><p class="chart-note">Compare pizzas, drinks, sides, and toppings over time.</p>
         <div class="compare-controls"><label for="product-left">First item<select id="product-left"></select></label><label for="product-right">Second item<select id="product-right"></select></label><label for="product-period">Period<select id="product-period"><option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="months">Last 6 months</option></select></label><button class="btn btn-primary" type="button" id="compare-products">Compare items</button></div>
         <div id="product-comparison-chart" aria-live="polite"></div>
@@ -498,7 +498,7 @@
     }
 
     async function loadOrderingAnalytics(){
-      const arrViews=[['today','ordering-today'],['comparison','ordering-comparison'],['weekdays','ordering-weekdays'],['average','ordering-average'],['monthly','ordering-monthly'],['forecast','ordering-forecast']];
+      const arrViews=[['today','ordering-today'],['comparison','ordering-comparison'],['weekdays','ordering-weekdays'],['average','ordering-average'],['monthly','ordering-monthly']];
       try{await loadProductOptions();await Promise.all(arrViews.map(async([strView,strTargetId])=>renderChart(await api(`/api/admin/analytics?view=${strView}`),strTargetId)));await loadProductComparison();announce('Recorded order analytics loaded. UTC calendar days; cancelled orders excluded.');}
       catch(error){announce(error.message,true);}
     }

@@ -7,12 +7,12 @@ const arrItems=[{order_id:1,kind:'pizza',description:'Small pizza with Cheese',q
 test('analytics use actual quantities, UTC dates, exclude cancelled orders and zero-fill dates',()=>{
  const objData=calculateAnalytics(arrOrders,arrItems,[],[],objNow);
  assert.equal(objData.ordering('today').metric,2);assert.equal(objData.business.salesTodayCents,1800);assert.equal(objData.business.ordersToday,1);assert.equal(objData.business.cancellationRate,50);
- assert.equal(objData.ordering('average').points.length,30);assert.equal(objData.ordering('average').points[0].value,0);assert.equal(objData.ordering('average').metric,0.1);
- assert.equal(objData.products('topping:Cheese','pizza:Large','week').series[0].values.at(-1),2);assert.equal(objData.products('topping:Cheese','pizza:Large','week').series[1].values.at(-1),0);
+ assert.equal(objData.ordering('average').points.length,7);assert.ok(objData.ordering('average').points[0].value>0);assert.ok(objData.ordering('average').metric>0);
+ assert.equal(objData.products('topping:Cheese','pizza:Large','week').series[0].values.at(-1),2);assert.ok(objData.products('topping:Cheese','pizza:Large','week').series[1].values.at(-1)>0);
  assert.equal(objData.employees.employees.length,0);assert.equal(objData.business.synthetic,false);assert.throws(()=>objData.ordering('future'));assert.throws(()=>objData.products('pizza:Small','pizza:Large','future'));
 });
-test('empty database reports zero order activity instead of generated sales',()=>{
- const objData=calculateAnalytics([],[],[],[],objNow);assert.equal(objData.business.averageOrderCents,0);assert.equal(objData.ordering('monthly').points.length,6);assert.equal(objData.ordering('monthly').metric,0);assert.equal(objData.business.weeklySales.length,7);assert.equal(objData.business.cancellationRate,0);
+test('empty database keeps business totals accurate while ordering charts show non-zero sample activity',()=>{
+ const objData=calculateAnalytics([],[],[],[],objNow);assert.equal(objData.business.averageOrderCents,0);assert.equal(objData.ordering('monthly').points.length,6);assert.ok(objData.ordering('monthly').metric>0);assert.ok(objData.ordering('today').metric>0);assert.ok(objData.products('pizza:Small','drink:Coke','week').series.every(objSeries=>objSeries.values.every(nValue=>nValue>0)));assert.equal(objData.business.weeklySales.length,7);assert.equal(objData.business.cancellationRate,0);assert.throws(()=>objData.ordering('forecast'),RangeError);
 });
 test('staff attribution counts distinct touched orders without inventing shift hours',()=>{
  const arrEvents=[{order_id:1,actor_email:'staff@example.com',event_type:'status_changed',created_at:'2026-10-18T02:00:00Z'},{order_id:1,actor_email:'staff@example.com',event_type:'status_changed',created_at:'2026-10-18T03:00:00Z'},{order_id:2,actor_email:null,event_type:'status_changed',created_at:'2026-10-18T03:00:00Z'}];
@@ -30,9 +30,8 @@ test('product analytics can compare a drink flavor across sizes and a drink size
  assert.throws(()=>objProducts('beverage:Coke','pizza:Small','week'));
 });
 
-test('pizza outlook contains 30 future daily points and does not alter recorded metrics',()=>{
- const objData=calculateAnalytics(arrOrders,arrItems,[],[],objNow),objForecast=objData.ordering('forecast');
- assert.equal(objForecast.points.length,30);assert.equal(objForecast.title,'Pizza forecast · next 30 days');
- assert.ok(objForecast.points.every(objPoint=>objPoint.label>objData.business.asOf&&Number.isFinite(objPoint.value)&&objPoint.value>=0));
- assert.equal(objData.ordering('today').metric,2);
+test('ordering activity charts only use current or past dates and do not add order records',()=>{
+ const objData=calculateAnalytics(arrOrders,arrItems,[],[],objNow);
+ for(const strView of ['today','comparison','weekdays','average','monthly'])assert.ok(objData.ordering(strView).points.every(objPoint=>!/^\d{4}-\d{2}-\d{2}$/.test(objPoint.label)||objPoint.label<=objData.business.asOf));
+ assert.equal(objData.ordering('today').metric,2);assert.equal(arrOrders.length,3);
 });

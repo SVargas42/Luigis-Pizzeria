@@ -67,5 +67,5 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
 test('admin pages center the desk title and keep account settings off analytics',()=>{
  assert.ok(strHtml.includes('.staff-heading{grid-column:2;grid-row:1;text-align:center}'));
  assert.ok(strHtml.includes("$('admin-account-settings').hidden=bAnalyticsPage"));
- assert.ok(strHtml.includes('id="ordering-forecast"'));
+ assert.ok(!strHtml.includes('ordering-forecast'));assert.ok(!strScript.includes("['forecast','ordering-forecast']"));
 });
