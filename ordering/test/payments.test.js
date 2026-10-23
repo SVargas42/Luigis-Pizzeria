@@ -222,10 +222,10 @@ test('pausing new card checkouts does not stop verification and fulfillment of a
  const objPaused=createPaymentService(objHarness.objStore.pool,objHarness.objStripe,{enabled:false,liveMode:false,siteUrl:'https://pizza.example',webhookSecret:'whsec_unit_secret'});
  await assert.rejects(objPaused.createCheckout(objHarness.objInput,null),objError=>objError.status===503);assert.equal((await objPaused.checkoutStatus(objHarness.objInput,null)).state,'paid');assert.equal(objHarness.objStore.state.orders.length,1);
 });
-test('pickup and Stripe cannot concurrently use the same order key',async()=>{
- const objHarness=harness();const arrResults=await Promise.allSettled([objHarness.objService.createCheckout(objHarness.objInput,null),objHarness.objService.reserveCheckoutKey(objHarness.objInput.requestKey,'pickup',null)]);
- assert.equal(arrResults.filter(objResult=>objResult.status==='fulfilled').length,1);assert.equal(arrResults.find(objResult=>objResult.status==='rejected').reason.status,409);
- assert.ok(objHarness.objStore.state.reservations.has(objHarness.objInput.requestKey));
+test('checkout keys reject the removed pickup payment channel',async()=>{
+ const objHarness=harness();
+ await assert.rejects(objHarness.objService.reserveCheckoutKey(objHarness.objInput.requestKey,'pickup',null),objError=>objError.status===400);
+ assert.equal(objHarness.objStore.state.reservations.size,0);
 });
 test('an old pickup order cannot be charged again under the same request key',async()=>{
  const objHarness=harness();objHarness.objStore.state.orders.push({id:99,request_key:objHarness.objInput.requestKey,payment_method:'in_store'});

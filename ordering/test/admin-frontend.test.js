@@ -63,3 +63,9 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
  objReadyCard.children.at(-1).children[0].handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
  assert.equal(arrRequests.at(-1).strPath,'/api/employee/orders/7/complete');assert.equal(arrRequests.at(-1).method,'POST');
 });
+
+test('admin pages center the desk title and keep account settings off analytics',()=>{
+ assert.ok(strHtml.includes('.staff-heading{grid-column:2;grid-row:1;text-align:center}'));
+ assert.ok(strHtml.includes("$('admin-account-settings').hidden=bAnalyticsPage"));
+ assert.ok(strHtml.includes('id="ordering-forecast"'));
+});

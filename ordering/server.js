@@ -77,7 +77,7 @@ const server = http.createServer(async(req,res)=>{
    let objInput;try{objInput=await body(req);if(!objInput||typeof objInput!=='object'||Array.isArray(objInput))throw Error();}catch{return send(res,400,{error:'Invalid checkout request.'});}
    try{
     const objIdentity=await resolveIdentity(req);
-    if(url.pathname.endsWith('/checkout')){if(!bStripeEnabled)return send(res,503,{error:'Online checkout is unavailable. Please choose payment at pickup.'});await objAccounts.limitCheckout(req,objIdentity?.email||objInput.customer?.email||'');await objAccounts.claimOrder(objInput.requestKey,objIdentity);return send(res,200,await objPayments.createCheckout(objInput,objIdentity));}
+    if(url.pathname.endsWith('/checkout')){if(!bStripeEnabled)return send(res,503,{error:'Secure card checkout is temporarily unavailable. Please try again later.'});await objAccounts.limitCheckout(req,objIdentity?.email||objInput.customer?.email||'');await objAccounts.claimOrder(objInput.requestKey,objIdentity);return send(res,200,await objPayments.createCheckout(objInput,objIdentity));}
     return send(res,200,await objPayments.checkoutStatus(objInput,objIdentity));
    }catch(objError){console.error('Stripe request failed:',objError.code||objError.status||objError.name);return send(res,objError.status||503,{error:objError.status?objError.message:'Payment service unavailable. Retry this checkout; do not submit a second payment.'});}
   }
@@ -93,19 +93,14 @@ const server = http.createServer(async(req,res)=>{
    try {bSameOrigin=Boolean(origin) && new URL(origin).host===req.headers.host;} catch {}
    if (!bSameOrigin) return send(res,403,{error:'Invalid request origin'});
   }
-  const bLifecycleRoute=(req.method==='POST'&&url.pathname==='/api/orders') || /^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
+  const bLifecycleRoute=/^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
   if(bLifecycleRoute){
    const objActor=await resolveIdentity(req);
    if(url.pathname.startsWith('/api/employee/')&&(!['admin','worker'].includes(objActor?.role)||!canAccessStaffRoute(objActor.role,url,req.method))){
     return send(res,403,{error:'A worker or administrator account is required.'});
    }
    let objSubmit=['POST','PATCH'].includes(req.method)?await body(req):undefined;
-   if(req.method==='POST'&&url.pathname==='/api/orders'){
-    if(objSubmit.paymentMethod!=='in_store')return send(res,400,{error:'Use Stripe checkout for online payments.'});
-    try{await objPayments.reserveCheckoutKey(objSubmit.requestKey,'pickup',objActor);}catch(objError){return send(res,objError.status||503,{error:objError.status?objError.message:'Checkout reservation unavailable.'});}
-    if(objActor)objSubmit.customer={firstName:objActor.firstName,lastName:objActor.lastName,email:objActor.email,phone:objActor.phone};
-    try{await objAccounts.claimOrder(objSubmit.requestKey,objActor);}catch(objError){return send(res,objError.status||503,{error:objError.status?objError.message:'Order ownership check failed.'});}
-   }
+
    const strPayload=objSubmit?JSON.stringify(objSubmit):undefined;
    // Only the local lifecycle service receives staff credentials; never forward a client-controlled host.
    const objResponse=await fetch(new URL(url.pathname,process.env.LIFECYCLE_URL||'http://127.0.0.1:8000'),{

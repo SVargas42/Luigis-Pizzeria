@@ -34,7 +34,7 @@ export function verifyPaidSession(objSession,objPayment){
 export function createPaymentService(objPool,objStripe,objConfig){
  const strOrigin=new URL(objConfig.siteUrl).origin;
  function requireConfigured(){if(!objStripe)fail(503,'Payment verification is temporarily unavailable. Do not submit another payment.');}
- function requireEnabled(){requireConfigured();if(!objConfig.enabled)fail(503,'Online payment is unavailable. Please choose payment at pickup.');}
+ function requireEnabled(){requireConfigured();if(!objConfig.enabled)fail(503,'Secure card checkout is temporarily unavailable. Please try again later.');}
  async function transaction(fnWork){const objConnection=await objPool.getConnection();try{await objConnection.beginTransaction();const objResult=await fnWork(objConnection);await objConnection.commit();return objResult;}catch(objError){await objConnection.rollback();throw objError;}finally{objConnection.release();}}
  function authorize(objPayment,strToken,objIdentity){
   if(!hasToken(strToken)||!timingSafeEqual(Buffer.from(digest(strToken),'hex'),Buffer.from(objPayment.access_token_hash,'hex')))fail(404,'Checkout not found.');
@@ -42,7 +42,7 @@ export function createPaymentService(objPool,objStripe,objConfig){
  }
  async function getPayment(strKey){if(typeof strKey!=='string'||!/^[a-f0-9-]{36}$/i.test(strKey))fail(400,'Invalid checkout key.');const [objPayment]=await objPool.query('SELECT * FROM stripe_payments WHERE request_key=?',[strKey]);if(!objPayment)fail(404,'Checkout not found.');return objPayment;}
  async function reserveCheckoutKey(strKey,strChannel,objIdentity){
-  if(typeof strKey!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(strKey)||!['pickup','stripe'].includes(strChannel))fail(400,'Invalid checkout key.');
+  if(typeof strKey!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(strKey)||strChannel!=='stripe')fail(400,'All orders must use secure card checkout.');
   await transaction(async objConnection=>{
    await objConnection.query('INSERT INTO checkout_reservations(request_key,channel,account_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE request_key=request_key',[strKey,strChannel,objIdentity?.id||null]);
    const [objReservation]=await objConnection.query('SELECT channel,account_id FROM checkout_reservations WHERE request_key=? FOR UPDATE',[strKey]);

@@ -1,6 +1,6 @@
 let bStripeAvailable=false;
-const objPaymentSelect=document.getElementById('payment-method');
-const objPaymentMessage=document.createElement('p');objPaymentMessage.id='stripe-status';objPaymentMessage.setAttribute('role','status');objPaymentMessage.setAttribute('aria-live','polite');objPaymentSelect.after(objPaymentMessage);
+const objPaymentForm=document.getElementById('payment-form');
+const objPaymentMessage=document.createElement('p');objPaymentMessage.id='stripe-status';objPaymentMessage.setAttribute('role','status');objPaymentMessage.setAttribute('aria-live','polite');objPaymentForm.prepend(objPaymentMessage);
 const objRetry=document.createElement('button');objRetry.type='button';objRetry.textContent='Check payment status';objRetry.className='btn btn-outline-secondary';objRetry.hidden=true;objPaymentMessage.after(objRetry);
 const objResume=document.createElement('a');objResume.textContent='Resume Stripe checkout';objResume.className='btn btn-outline-secondary';objResume.hidden=true;objRetry.after(objResume);
 const strStorageKey='luigiStripeCheckout';
@@ -13,7 +13,7 @@ async function checkStripePayment(){
 }
 objRetry.addEventListener('click',checkStripePayment);
 async function beginStripeCheckout(objPayload){
- if(!bStripeAvailable)throw Error('Online payment is unavailable. Choose payment at pickup.');
+ if(!bStripeAvailable)throw Error('Secure card checkout is temporarily unavailable. Please try again later.');
  // The request key and secret survive a redirect but contain no card data or customer contact details.
  const objStored=readCheckout();let strToken;
  if(objStored?.requestKey===objPayload.requestKey)strToken=objStored.checkoutToken;
@@ -26,7 +26,7 @@ async function beginStripeCheckout(objPayload){
  location.assign(objUrl.href);
 }
 async function initializeStripe(){
- try{const objResponse=await fetch('/api/stripe/config');const objConfig=await objResponse.json();bStripeAvailable=Boolean(objResponse.ok&&objConfig.enabled);if(bStripeAvailable){const objOption=document.createElement('option');objOption.value='online';objOption.textContent='Pay securely online with Stripe';objPaymentSelect.append(objOption);}}
+ try{const objResponse=await fetch('/api/stripe/config');const objConfig=await objResponse.json();bStripeAvailable=Boolean(objResponse.ok&&objConfig.enabled);if(!bStripeAvailable)objPaymentMessage.textContent='Online ordering is temporarily unavailable. Please check back soon.';}
  catch{bStripeAvailable=false;}
  const objQuery=new URLSearchParams(location.search);
  if(objQuery.get('checkout')==='success'){

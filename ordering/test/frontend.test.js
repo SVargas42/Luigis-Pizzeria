@@ -8,7 +8,7 @@ const strHtml=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 const strScript=strHtml.match(/<script>([\s\S]*?)<\/script>/)[1];
 function createHarness(bFail=false,arrMenuRows=[{category:'pizza',name:'Small',price_cents:1000},{category:'topping',name:'Cheese',price_cents:150},{category:'topping',name:'Pepperoni',price_cents:200}]) {
  const mapElements=new Map(),arrRequests=[];
- function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},replaceChildren(){this.children=[]}}}
+ function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},prepend(...arrChildren){this.children.unshift(...arrChildren)},replaceChildren(){this.children=[]}}}
  for(const strId of ['step-1','step-2','step-3','step-4']){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement);}
  const mapWindowListeners=new Map();
  const objStorage=new Map();const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:'',assign(strUrl){this.href=strUrl}},sessionStorage:{setItem(k,v){objStorage.set(k,v)},getItem(k){return objStorage.get(k)||null},removeItem(k){objStorage.delete(k)}},URLSearchParams,crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
@@ -22,10 +22,10 @@ function createHarness(bFail=false,arrMenuRows=[{category:'pizza',name:'Small',p
   return {ok:!bFail,json:async()=>bFail?{error:'Checkout unavailable'}:{orderNumber:'LP-12',subtotalCents:1000,taxCents:0,totalCents:1000,paymentMethod:'in_store',paymentStatus:'unpaid',trackerUrl:'/track?token=abc',items:[{description:'Small Pizza',quantity:1,unit:1000}]}};
  },Stripe(){return {elements(){return {create(){return {mount(){}}}}},confirmCardPayment:async()=>({paymentIntent:{id:'pi_sample'}})}}};
  vm.createContext(objContext);vm.runInContext(strScript,objContext);
- for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','5551234567'],['payment-method','in_store']])objContext.document.getElementById(strId).value=strValue;
+ for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','5551234567']])objContext.document.getElementById(strId).value=strValue;
  return {mapElements,arrRequests,objContext};
 }
-test('custom categories do not block supported menu items or pickup checkout',async()=>{
+test('custom categories do not block supported menu items or card checkout',async()=>{
  const objHarness=createHarness(false,[
   {category:'dessert',name:'Brownie',price_cents:400},
   {category:'pizza',name:'Small',price_cents:1100},
@@ -43,10 +43,10 @@ test('custom categories do not block supported menu items or pickup checkout',as
  assert.equal(vm.runInContext('prices.beverages.Water',objHarness.objContext),0);
  assert.ok(objHarness.mapElements.get('sides-list').innerHTML.includes('Garlic Roll'));
  assert.ok(!objHarness.mapElements.get('sides-list').innerHTML.includes('Brownie'));
- vm.runInContext("state.pizzas[0].size='Small'",objHarness.objContext);
+ let objCheckout;objHarness.objContext.beginStripeCheckout=async objPayload=>{objCheckout=JSON.parse(JSON.stringify(objPayload));};
+ vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.equal(objHarness.arrRequests[0].pizzas[0].size,'Small');
- assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
+ assert.equal(objCheckout.pizzas[0].size,'Small');assert.equal(objHarness.arrRequests.length,0);
 });
 
 test('unsupported category names cannot resolve inherited object properties',async()=>{
@@ -72,10 +72,10 @@ test('worker Orders navigation opens the kitchen queue without revealing admin a
 });
 
 test('checkout submits multiple distinct side selections as separate numeric quantities',async()=>{
- const objHarness=createHarness();
+ const objHarness=createHarness();let objCheckout;objHarness.objContext.beginStripeCheckout=async objPayload=>{objCheckout=JSON.parse(JSON.stringify(objPayload));};
  vm.runInContext("state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}];",objHarness.objContext);
- await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.deepEqual(objHarness.arrRequests[0].sides,[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}]);
+ vm.runInContext('goTo(3)',objHarness.objContext);await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.deepEqual(objCheckout.sides,[{name:'Breadsticks',quantity:2},{name:'Pizza Stick',quantity:1}]);assert.equal(objHarness.arrRequests.length,0);
 });
 
 test('cancelled customer order history overrides its former preparation stage',()=>{
@@ -88,41 +88,18 @@ test('guest details place email before the optional phone field',()=>{
  const nEmailPosition=strHtml.indexOf('for="email"'),nPhonePosition=strHtml.indexOf('for="phone"');
  assert.ok(nEmailPosition>=0&&nPhonePosition>nEmailPosition);
 });
-test('customer places pickup order and sees an itemized receipt and tracker',async()=>{
- const objHarness=createHarness();
- for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','1234567890']])objHarness.mapElements.get(strId).value=strValue;
- objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});
+test('checkout cannot fall through to an unpaid order when card checkout is unavailable',async()=>{
+ const objHarness=createHarness();objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
-
- assert.equal(objHarness.arrRequests[0].customer.email,'ada@example.com');
- assert.equal(objHarness.arrRequests[0].pizzas[0].size,'Small');
- assert.equal(objHarness.arrRequests[0].paymentMethod,'in_store');
- assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=abc');
- assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
- assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-12');
- assert.equal(/cardNumber|cvv|expiry/.test(JSON.stringify(objHarness.arrRequests[0])),false);
+ assert.equal(objHarness.arrRequests.length,0);assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);
+ assert.match(objHarness.mapElements.get('order-error').textContent,/card checkout is loading/i);
+ assert.doesNotMatch(strHtml,/Pay at Pickup|payment-method/);
 });
-test('every Breadsticks size can reach Stripe checkout with its selected size',async()=>{
- for(const strSize of ['Small','Medium','Large']){
-  const objHarness=createHarness();let objSubmitted;
-  objHarness.objContext.beginStripeCheckout=async objPayload=>{objSubmitted=JSON.parse(JSON.stringify(objPayload));};
-  vm.runInContext(`state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',size:'${strSize}',quantity:2}];`,objHarness.objContext);
-  objHarness.mapElements.get('payment-method').value='online';
-  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
-  assert.equal(objSubmitted.sides[0].size,strSize);assert.equal(objSubmitted.sides[0].quantity,2);
-  assert.equal(objHarness.arrRequests.length,0);
- }
-});
-
-test('failed submissions show an error and reuse the retry key',async()=>{
- const objHarness=createHarness(true);
- await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.equal(objHarness.mapElements.get('order-error').textContent,'Checkout unavailable');
- assert.equal(objHarness.mapElements.get('place-order').disabled,false);
- assert.equal(objHarness.arrRequests[0].requestKey,objHarness.arrRequests[1].requestKey);
- assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
+test('failed submissions keep order data local and show a retryable error',async()=>{
+ const objHarness=createHarness(true);await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.equal(objHarness.arrRequests.length,0);assert.equal(objHarness.mapElements.get('place-order').disabled,false);
+ assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);
 });
 test('menu topping labels and totals follow individual database prices',async()=>{
  const objHarness=createHarness();
@@ -166,17 +143,19 @@ test('sign out clears the active role, returns home, and offers sign-in again',a
  assert.equal(objHarness.mapElements.get('home-page').classList.contains('hidden'),false);
  assert.match(objHarness.mapElements.get('auth-message').textContent,/guest/i);
 });
-test('signed-in customer submits pickup order without collecting card details',async()=>{
- const objHarness=createHarness();
- objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'8',role:'customer',email:'customer@example.com',firstName:'Ada',lastName:'Customer',phone:'5551234567'}});
- objHarness.mapElements.get('phone').value='5551234567';objHarness.mapElements.get('payment-method').value='in_store';
+test('signed-in customers also require secure card checkout',async()=>{
+ const objHarness=createHarness();objHarness.objContext.window.LuigiPizzeriaIntegration.acceptAuthState({authenticated:true,authReady:true,user:{id:'8',role:'customer',email:'customer@example.com',firstName:'Ada',lastName:'Customer',phone:'5551234567'}});
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
- assert.equal(objHarness.arrRequests.length,1);
- assert.equal(objHarness.arrRequests[0].customer.email,'customer@example.com');
- assert.equal(objHarness.arrRequests[0].paymentMethod,'in_store');
- assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
+ assert.equal(objHarness.arrRequests.length,0);assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);
+ assert.doesNotMatch(strHtml,/Pay at Pickup|payment-method/);
 });
+
+test('signed-in header places the red Orders action first',()=>{
+ const strControls=strHtml.match(/<nav class="account-controls"[^>]*>([\s\S]*?)<\/nav>/)?.[1]||'';
+ assert.ok(strControls.indexOf('id="orders-button"')<strControls.indexOf('id="sign-in"'));
+});
+test('breadsticks are a simple side without size controls',()=>{assert.doesNotMatch(strHtml,/id="breadstick-size"/);assert.match(strScript,/side\.quantity=Number\(input\.value\)/);});
 
 
 test('signed-in account without phone can enter the required contact details',()=>{
@@ -200,7 +179,7 @@ test('card checkout redirects to Stripe and retries with the same secret, withou
  const objHarness=createHarness(),fnOriginal=objHarness.objContext.fetch,arrStripeRequests=[];objHarness.objContext.URL=URL;
  objHarness.objContext.fetch=async(strPath,objOptions)=>{if(strPath==='/api/stripe/config')return {ok:true,json:async()=>({enabled:true})};if(strPath==='/api/stripe/checkout'){arrStripeRequests.push(JSON.parse(objOptions.body));return {ok:true,json:async()=>({state:'open',url:'https://checkout.stripe.com/c/pay/cs_test_example'})};}return fnOriginal(strPath,objOptions);};
  vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));
- objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});objHarness.mapElements.get('payment-method').value='online';
+ objHarness.mapElements.get('customer-form').handlers.submit({preventDefault(){}});
  vm.runInContext("state.pizzas[0].size='Small';goTo(3)",objHarness.objContext);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
  assert.equal(arrStripeRequests.length,2);assert.equal(arrStripeRequests[0].checkoutToken,arrStripeRequests[1].checkoutToken);assert.match(arrStripeRequests[0].checkoutToken,/^[a-f0-9]{64}$/);assert.equal(objHarness.arrRequests.length,0);assert.equal(objHarness.objContext.location.href,'https://checkout.stripe.com/c/pay/cs_test_example');assert.notEqual(vm.runInContext('state.step',objHarness.objContext),4);
@@ -218,5 +197,5 @@ test('verified return displays the paid receipt, tracker and confirmation withou
   if(strPath==='/api/stripe/status')return {ok:true,json:async()=>({state:'paid',receipt:{orderNumber:'LP-99',customer:{name:'Ada Customer',email:'ada@example.com',phone:'5551234567'},items:[{description:'Small pizza',quantity:1,unit:1000}],subtotalCents:1000,taxCents:0,totalCents:1000,paymentMethod:'online',paymentStatus:'paid',trackerUrl:'/track?token=verified'}})};
   return fnOriginal(strPath,objOptions);
  };
- vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));assert.equal(vm.runInContext('state.step',objHarness.objContext),4);assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-99');assert.equal(objHarness.mapElements.get('receipt-details').textContent,'Stripe · paid');assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=verified');assert.equal(objHarness.objContext.sessionStorage.getItem('luigiStripeCheckout'),null);assert.equal(objHarness.arrRequests.length,0);
+ vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));assert.equal(vm.runInContext('state.step',objHarness.objContext),4);assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-99');assert.equal(objHarness.mapElements.get('receipt-details').textContent,'Paid by card · paid');assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=verified');assert.equal(objHarness.objContext.sessionStorage.getItem('luigiStripeCheckout'),null);assert.equal(objHarness.arrRequests.length,0);
 });

@@ -29,3 +29,10 @@ test('product analytics can compare a drink flavor across sizes and a drink size
  assert.equal(objProducts('drink-size:Large','topping:Cheese','week').series[0].values.at(-1),4);
  assert.throws(()=>objProducts('beverage:Coke','pizza:Small','week'));
 });
+
+test('pizza outlook contains 30 future daily points and does not alter recorded metrics',()=>{
+ const objData=calculateAnalytics(arrOrders,arrItems,[],[],objNow),objForecast=objData.ordering('forecast');
+ assert.equal(objForecast.points.length,30);assert.equal(objForecast.title,'Pizza forecast · next 30 days');
+ assert.ok(objForecast.points.every(objPoint=>objPoint.label>objData.business.asOf&&Number.isFinite(objPoint.value)&&objPoint.value>=0));
+ assert.equal(objData.ordering('today').metric,2);
+});

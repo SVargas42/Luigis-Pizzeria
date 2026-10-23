@@ -4,7 +4,8 @@ const strToken=objFragment.get('token')||'';
 const strMode=objFragment.get('action')||objQuery.get('mode')||'login';
 if(location.hash)history.replaceState(null,'',location.pathname+location.search);
 let strSelectedId=null;
-function announce(strText){$('message').textContent=strText;}
+let objAuthenticatedUser=null;
+function announce(strText){$('message').hidden=false;$('message').textContent=strText;}
 function showRegistrationAlert(strText, bSuccess) {
   const objAlert = $('register-alert');
   objAlert.textContent = `${bSuccess ? 'Success' : 'Error'}: ${strText}`;
@@ -18,22 +19,23 @@ async function loadAccounts(){try{const arrAccounts=await api('/api/admin/accoun
 async function init(){
  try{
   const objSession=await api('/api/session');
+  objAuthenticatedUser=objSession.authenticated?objSession.user:null;
   if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';if(objSession.user.role==='worker'){$('admin-link').hidden=false;$('admin-link').href='/staff';$('admin-link').textContent='Kitchen order queue';}}
-  if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('management').hidden=false;$('title').textContent='Manage accounts';await loadAccounts();return;}
+  if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('signed-in').hidden=true;$('title').hidden=true;$('message').hidden=true;$('account-home-link').hidden=true;$('account-actions').hidden=true;$('management').hidden=false;$('management-title').focus();await loadAccounts();return;}
   if(strMode==='verify'){$('title').textContent='Verify email';announce((await api('/api/auth/verify',{token:strToken})).message);return;}
   if(!['login','register','forgot','resend','reset','invite','profile','password'].includes(strMode))throw Error('Choose a valid account action.');
   if(['profile','password'].includes(strMode)&&!objSession.authenticated)throw Error('Sign in to update your account.');
   const objTitles={login:'Sign in',register:'Create account',forgot:'Reset password',resend:'Resend verification',reset:'Choose a new password',invite:'Accept staff invitation',profile:'Your profile',password:'Change password'};
-  $('title').textContent=objTitles[strMode];$('account-form').hidden=false;$('submit').textContent=objTitles[strMode];
+  $('title').textContent=objTitles[strMode];$('account-form').hidden=false;$('account-form').classList.toggle('is-profile',strMode==='profile');$('submit').textContent=strMode==='profile'?'Save':objTitles[strMode];
   const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
-  $('profile-fields').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
-  $('email-field').hidden=!bEmail;$('email').required=bEmail;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
+  $('profile-fields').hidden=!bProfile;$('phone-field').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
+  $('email-field').hidden=!(bEmail||strMode==='profile');$('email').required=bEmail;$('email').disabled=strMode==='profile';$('email').classList.toggle('readonly-input',strMode==='profile');$('email-locked-help').hidden=strMode!=='profile';if(strMode==='profile'){$('email').value=objSession.user.email;$('email').setAttribute('aria-describedby','email-locked-help');}else $('email').removeAttribute('aria-describedby');$('account-actions').hidden=strMode==='profile';$('profile-actions').hidden=strMode!=='profile';$('signed-in').hidden=strMode==='profile'||!objSession.authenticated;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
   const bConfirmPassword = ['register', 'reset'].includes(strMode);
   $('confirm-password-field').hidden = !bConfirmPassword;
   $('confirmPassword').required = bConfirmPassword;
   $('confirm-password-label').textContent = strMode === 'reset' ? 'Confirm New Password' : 'Confirm Password';
   $('current-field').hidden=strMode!=='password';$('currentPassword').required=strMode==='password';
-  $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Email changes require restaurant support.':'Use the email address associated with your account.';
+  $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Your account email is shown for reference.':'Use the email address associated with your account.';
   if (strMode === 'reset') $('instructions').textContent = 'Enter your new password below.';
   if(strMode==='profile')for(const strId of ['firstName','lastName','phone'])$(strId).value=strId==='phone'?normalizePhone(objSession.user.phone):objSession.user[strId];
  }catch(objError){announce(objError.message);}
@@ -90,6 +92,7 @@ $('account-form').onsubmit=async objEvent=>{
   else announce(objError.message);
  }finally{$('submit').disabled=false;}
 };
+$('reset-password').onclick=async()=>{if(!objAuthenticatedUser?.email)return;const objButton=$('reset-password');objButton.disabled=true;try{const objResult=await api('/api/auth/forgot',{email:objAuthenticatedUser.email});announce(objResult.message||'If a matching account exists, a password reset link will be sent.');}catch(objError){announce(objError.message);}finally{objButton.disabled=false;}};
 $('phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 $('invite-phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 $('logout').onclick=async()=>{try{await api('/api/auth/logout',{});location.assign('/');}catch(objError){announce(objError.message);}};

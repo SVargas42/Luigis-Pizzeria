@@ -16,9 +16,18 @@
   <style>
     .menu-description-field{grid-column:1/-1}.menu-add-form textarea,.dialog-inner textarea{width:100%;min-height:90px;resize:vertical}.menu-description{max-width:320px;white-space:pre-wrap;overflow-wrap:anywhere}.menu-actions{display:flex;gap:8px;flex-wrap:wrap}.menu-actions .btn{min-height:44px}.menu-filter{display:flex;align-items:center;gap:9px;min-height:44px}.menu-filter input{width:20px;height:20px}button:disabled{cursor:not-allowed}.dialog-inner>label{margin-top:12px}.menu-confirmation-phrase{overflow-wrap:anywhere}.menu-delete-item{font-weight:700}
   </style>
+  <style>
+    header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+    .admin-header-links{grid-column:1;grid-row:1;display:flex;flex-wrap:wrap;gap:14px}
+    .staff-heading{grid-column:2;grid-row:1;text-align:center}
+    .staff-heading .intro{margin:7px 0 0}
+    .page-links{grid-column:3;grid-row:1;justify-content:flex-end}
+    #ordering-average,#ordering-forecast{grid-column:1/-1}
+    @media(max-width:760px){header{grid-template-columns:1fr;justify-items:center}.admin-header-links,.staff-heading,.page-links{grid-column:1;grid-row:auto;justify-content:center;text-align:center}}
+  </style>
 </head>
 <body>
-  <header><a href="/admin/accounts">Manage accounts</a><a href="/account">Account settings</a><div><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
+  <header><nav class="admin-header-links" aria-label="Staff settings"><a href="/admin/accounts">Manage accounts</a><a id="admin-account-settings" href="/account">Account settings</a></nav><div class="staff-heading"><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
   <main>
     <p class="message" id="message" role="status" aria-live="polite"></p>
     <div class="tabs" id="orders-tabs" role="tablist" aria-label="Order workspace">
@@ -42,7 +51,7 @@
     </section>
     <section class="panel" role="tabpanel" id="panel-ordering" aria-labelledby="tab-ordering" tabindex="0" hidden>
       <div class="toolbar"><div><h2>Ordering Analytics</h2><p>Compare sales patterns across separate, date-aligned views.</p></div></div>
-      <div class="analytics-grid"><div class="chart-box" id="ordering-today"></div><div class="chart-box" id="ordering-comparison"></div><div class="chart-box" id="ordering-weekdays"></div><div class="chart-box" id="ordering-monthly"></div><div class="chart-box" id="ordering-average"></div></div>
+      <div class="analytics-grid"><div class="chart-box" id="ordering-today"></div><div class="chart-box" id="ordering-comparison"></div><div class="chart-box" id="ordering-weekdays"></div><div class="chart-box" id="ordering-monthly"></div><div class="chart-box" id="ordering-average"></div><div class="chart-box" id="ordering-forecast"></div></div>
       <section class="chart-box mt-3" aria-labelledby="product-comparison-title"><h3 id="product-comparison-title">Compare menu items</h3><p class="chart-note">Compare pizzas, drinks, sides, and toppings over time.</p>
         <div class="compare-controls"><label for="product-left">First item<select id="product-left"></select></label><label for="product-right">Second item<select id="product-right"></select></label><label for="product-period">Period<select id="product-period"><option value="week">Last 7 days</option><option value="month">Last 30 days</option><option value="months">Last 6 months</option></select></label><button class="btn btn-primary" type="button" id="compare-products">Compare items</button></div>
         <div id="product-comparison-chart" aria-live="polite"></div>
@@ -87,7 +96,8 @@
     $('analytics-page-link').href=`/admin/analytics${bDemoMode?'?tab=ordering':''}`;
     $('orders-page-link').setAttribute('aria-current',String(!bAnalyticsPage));
     $('analytics-page-link').setAttribute('aria-current',String(bAnalyticsPage));
-    $('staff-title').textContent=bAnalyticsPage?'Luigi’s analytics':'Luigi’s order desk';
+    $('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':'Luigi’s Order Desk';
+    $('admin-account-settings').hidden=bAnalyticsPage;
     $('orders-tabs').hidden=bAnalyticsPage;
     $('analytics-tabs').hidden=!bAnalyticsPage;
     for(const objPanel of document.querySelectorAll('[role="tabpanel"]')){
@@ -488,7 +498,7 @@
     }
 
     async function loadOrderingAnalytics(){
-      const arrViews=[['today','ordering-today'],['comparison','ordering-comparison'],['weekdays','ordering-weekdays'],['average','ordering-average'],['monthly','ordering-monthly']];
+      const arrViews=[['today','ordering-today'],['comparison','ordering-comparison'],['weekdays','ordering-weekdays'],['average','ordering-average'],['monthly','ordering-monthly'],['forecast','ordering-forecast']];
       try{await loadProductOptions();await Promise.all(arrViews.map(async([strView,strTargetId])=>renderChart(await api(`/api/admin/analytics?view=${strView}`),strTargetId)));await loadProductComparison();announce('Recorded order analytics loaded. UTC calendar days; cancelled orders excluded.');}
       catch(error){announce(error.message,true);}
     }
