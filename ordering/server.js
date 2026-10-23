@@ -144,6 +144,7 @@ const server = http.createServer(async(req,res)=>{
   }
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/employees') return send(res,200,(await loadAnalytics(pool)).employees);
   if (req.method==='GET' && url.pathname==='/api/admin/analytics/business') return send(res,200,(await loadAnalytics(pool)).business);
+  if(req.method==='GET'&&url.pathname==='/management-header.css'){const strCss=await readFile(new URL('./public/management-header.css',import.meta.url));res.writeHead(200,{'Content-Type':'text/css; charset=utf-8','Cache-Control':'no-store'});return res.end(strCss);}
   const mapBrowserModules={'/staff.js':'./public/staff.js','/admin-model.js':'./admin-model.js','/admin-demo.js':'./admin-demo.js','/domain.js':'./domain.js','/validation.js':'./validation.js','/tracker.js':'./public/tracker.js','/account.js':'./public/account.js','/stripe-checkout.js':'./public/stripe-checkout.js'};
   if (req.method==='GET' && mapBrowserModules[url.pathname]) {
    const strSource=await readFile(new URL(mapBrowserModules[url.pathname],import.meta.url));

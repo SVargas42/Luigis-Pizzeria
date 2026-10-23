@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Luigi’s staff desk</title>
+  <link rel="stylesheet" href="/management-header.css">
   <style>
     :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#292720;background:#f8f4eb;font-synthesis:none;--tomato:#9e342b;--basil:#315e43;--ink:#292720;--muted:#6d685f;--line:#e6dece;--cream:#fffdf8;--warning:#8c4e08}
     *{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #286ca5;outline-offset:2px}
@@ -18,15 +19,11 @@
   </style>
   <style>
     header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
-    .staff-heading{grid-column:2;grid-row:1;text-align:center}
-    .staff-heading .intro{margin:7px 0 0}
-    .page-links{grid-column:3;grid-row:1;justify-content:flex-end}
     #ordering-average{grid-column:1/-1}
-    @media(max-width:760px){header{grid-template-columns:1fr;justify-items:center}.staff-heading,.page-links{grid-column:1;grid-row:auto;justify-content:center;text-align:center}}
   </style>
 </head>
 <body>
-  <header><span aria-hidden="true"></span><div class="staff-heading"><h1 id="staff-title">Luigi’s Order Desk</h1><p class="intro" id="staff-subtitle">Orders and business insights</p></div><nav class="page-links" aria-label="Page navigation"><a id="go-back" href="/admin/management">Go back</a><a href="/">Return to Home</a></nav></header>
+  <header class="workspace-header"><span aria-hidden="true"></span><div class="workspace-heading"><h1 id="staff-title">Luigi’s Order Desk</h1><p id="staff-subtitle">Orders and business insights</p></div><nav class="header-actions" aria-label="Page navigation"><a id="go-back" href="/admin/management">Go back</a><a href="/">Return to Home</a></nav></header>
   <main>
     <p class="message" id="message" role="status" aria-live="polite"></p>
     <div class="tabs" id="orders-tabs" role="tablist" aria-label="Order workspace">

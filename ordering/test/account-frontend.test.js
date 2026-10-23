@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const strHtml=readFileSync(new URL('../public/account.html',import.meta.url),'utf8');
 const strScript=readFileSync(new URL('../public/account.js',import.meta.url),'utf8');
+const strHeaderCss=readFileSync(new URL('../public/management-header.css',import.meta.url),'utf8');
 
 test('account actions follow the primary form and phone inputs stay short and formatted',()=>{
  assert.ok(strHtml.indexOf('</form>')<strHtml.indexOf('id="account-actions"'));
@@ -24,4 +25,4 @@ test('profile offers locked email and only the requested three actions',()=>{
  assert.ok(strScript.includes("$('profile-actions').hidden=strMode!=='profile'"));
 });
 test('account management begins at its focused Account Management heading',()=>{assert.ok(strHtml.includes('id="management-title" tabindex="-1">Account Management'));assert.ok(strScript.includes("$('account-home-link').hidden=true;$('account-actions').hidden=true"));});
-test('account management uses the standard cream banner without the photo hero',()=>{assert.ok(!strHtml.includes('site-hero'));assert.ok(strHtml.includes('class="admin-page-header"'));assert.ok(strHtml.includes('grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)'));assert.ok(strHtml.includes('id="management-title" tabindex="-1">Account Management'));assert.ok(strHtml.includes('>Go back</a><a href="/">Return to Home</a>'));});
+test('account management and profile share the Management Settings header',()=>{assert.ok(!strHtml.includes('site-hero'));assert.ok(strHtml.includes('class="workspace-header"'));assert.ok(strHtml.includes('id="management-title" tabindex="-1">Account Management'));assert.ok(strHtml.includes('>Go back</a><a href="/">Return to Home</a>'));assert.ok(strScript.includes("$('management-title').textContent='Your profile'"));assert.ok(strScript.includes("setupBackLink('/',true)"));assert.match(strHeaderCss,/min-height:116px/);assert.match(strHeaderCss,/Georgia,serif/);});

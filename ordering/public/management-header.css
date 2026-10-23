@@ -1,0 +1,9 @@
+.workspace-header{box-sizing:border-box;min-height:116px;width:100%;margin:0;padding:18px max(22px,calc((100vw - 1180px)/2));display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;background:#fffdf8;border-bottom:1px solid #e6dece;color:#292720}
+.workspace-header>span{grid-column:1;grid-row:1}
+.workspace-heading{grid-column:2;grid-row:1;text-align:center;min-width:0}
+.workspace-heading h1{font:700 clamp(1.8rem,4vw,2.5rem)/1.1 Georgia,serif;color:#9e342b;margin:0}
+.workspace-heading p{font:400 16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#6d685f;margin:7px 0 0}
+.header-actions{grid-column:3;grid-row:1;display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:14px}
+.header-actions a{font:700 16px/1.4 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#9e342b;text-decoration:underline;text-underline-offset:2px}
+.workspace-header a:focus-visible{outline:3px solid #286ca5;outline-offset:3px;border-radius:2px}
+@media(max-width:760px){.workspace-header{min-height:0;grid-template-columns:1fr;justify-items:center;padding:16px}.workspace-header>span{display:none}.workspace-heading,.header-actions{grid-column:1;grid-row:auto;text-align:center;justify-content:center}.header-actions{margin-top:2px}}

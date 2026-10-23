@@ -70,7 +70,9 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
 });
 
 test('admin pages share a centered standard header and keep only back and home links',()=>{
- assert.ok(strHtml.includes('.staff-heading{grid-column:2;grid-row:1;text-align:center}'));
+ assert.ok(strHtml.includes('class="workspace-header"'));
+ assert.ok(strHtml.includes('class="workspace-heading"'));
+ assert.ok(strHtml.includes('class="header-actions"'));
  assert.ok(strHtml.includes('aria-label="Page navigation"><a id="go-back"'));
  assert.ok(strHtml.includes("$('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':bMenuPage?'Luigi’s Menu':'Luigi’s Order Desk'"));
  assert.ok(!strHtml.includes('ordering-forecast'));assert.ok(!strScript.includes("['forecast','ordering-forecast']"));
