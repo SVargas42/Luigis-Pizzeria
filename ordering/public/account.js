@@ -21,7 +21,7 @@ async function init(){
   const objSession=await api('/api/session');
   objAuthenticatedUser=objSession.authenticated?objSession.user:null;
   if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';if(objSession.user.role==='worker'){$('admin-link').hidden=false;$('admin-link').href='/staff';$('admin-link').textContent='Kitchen order queue';}}
-  if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('signed-in').hidden=true;$('title').hidden=true;$('message').hidden=true;$('account-home-link').hidden=true;$('account-actions').hidden=true;$('management').hidden=false;$('management-title').focus();await loadAccounts();return;}
+  if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('signed-in').hidden=true;$('title').hidden=true;$('message').hidden=true;$('account-home-link').hidden=true;$('account-actions').hidden=true;$('management').hidden=false;$('management-header').hidden=false;const objBack=$('management-back');if(document.referrer&&new URL(document.referrer).origin===location.origin)objBack.href=document.referrer;objBack.addEventListener('click',objEvent=>{if(objBack.href!==location.origin+'/admin/management'&&history.length>1){objEvent.preventDefault();history.back();}});$('management-title').focus();await loadAccounts();return;}
   if(strMode==='verify'){$('title').textContent='Verify email';announce((await api('/api/auth/verify',{token:strToken})).message);return;}
   if(!['login','register','forgot','resend','reset','invite','profile','password'].includes(strMode))throw Error('Choose a valid account action.');
   if(['profile','password'].includes(strMode)&&!objSession.authenticated)throw Error('Sign in to update your account.');
@@ -85,7 +85,7 @@ $('account-form').onsubmit=async objEvent=>{
   }
   const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
   if (strMode === 'reset') $('confirmPassword').value = '';
-  if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/staff','/admin','/admin/analytics','/admin/accounts'].includes(strNext)?strNext:objResult.user?.role==='worker'?'/staff':'/');}
+  if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/staff','/admin','/admin/analytics','/admin/accounts','/admin/menu','/admin/management'].includes(strNext)?strNext:objResult.user?.role==='worker'?'/staff':'/');}
   else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
  }catch(objError){
   if (strMode === 'register') showRegistrationAlert('Unable to complete registration. Please retry.', false);

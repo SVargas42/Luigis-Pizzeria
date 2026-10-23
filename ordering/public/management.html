@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Management Settings | Luigi’s Pizza</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#292720;background:#f8f4eb;--tomato:#9e342b;--basil:#315e43;--muted:#6d685f;--line:#e6dece;--cream:#fffdf8}
+    *{box-sizing:border-box}body{margin:0}a:focus-visible{outline:3px solid #286ca5;outline-offset:3px}
+    header{background:var(--cream);border-bottom:1px solid var(--line);padding:18px max(22px,calc((100vw - 1180px)/2));display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px}
+    header h1{font:700 clamp(1.8rem,4vw,2.5rem)/1.1 Georgia,serif;color:var(--tomato);margin:0;text-align:center}header p{color:var(--muted);margin:7px 0 0;text-align:center}.page-links{display:flex;justify-content:flex-end;gap:14px;flex-wrap:wrap}.page-links a{color:var(--tomato);font-weight:700}
+    main{max-width:1180px;margin:0 auto;padding:30px 22px 60px}h2{font:700 1.5rem Georgia,serif;color:var(--basil)}.workspace-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.workspace-link{display:flex;min-height:140px;flex-direction:column;justify-content:center;gap:8px;padding:22px;border:1px solid var(--line);border-radius:14px;background:var(--cream);color:#292720;text-decoration:none;box-shadow:0 3px 12px #3927100b;transition:transform .18s ease,box-shadow .18s ease}.workspace-link:hover{transform:translateY(-2px);box-shadow:0 8px 22px #39271018}.workspace-link strong{font:700 1.45rem Georgia,serif;color:var(--tomato)}.workspace-link span{color:var(--muted);line-height:1.5}@media(max-width:650px){header{grid-template-columns:1fr;justify-items:center;padding:16px}.page-links{justify-content:center}.workspace-grid{grid-template-columns:1fr}main{padding:22px 14px 44px}.workspace-link{min-height:112px}}@media(prefers-reduced-motion:reduce){.workspace-link{transition:none}}
+  </style>
+</head>
+<body>
+  <header><span aria-hidden="true"></span><div><h1>Luigi’s Management Settings</h1><p>Choose a workspace to continue</p></div><nav class="page-links" aria-label="Page navigation"><a id="go-back" href="/">Go back</a><a href="/">Return to Home</a></nav></header>
+  <main>
+    <h2>Management</h2>
+    <nav class="workspace-grid" aria-label="Management workspaces">
+      <a class="workspace-link" href="/admin/analytics"><strong>Analytics</strong><span>Review ordering, employee, and business performance.</span></a>
+      <a class="workspace-link" href="/admin"><strong>Orders</strong><span>Manage current orders, past orders, and customer records.</span></a>
+      <a class="workspace-link" href="/admin/accounts"><strong>Manage Accounts</strong><span>Invite team members and update account access.</span></a>
+      <a class="workspace-link" href="/admin/menu"><strong>Menu</strong><span>Add menu items and update item details or pricing.</span></a>
+    </nav>
+  </main>
+  <script>
+    const objBackLink=document.getElementById('go-back');
+    if(document.referrer&&new URL(document.referrer).origin===location.origin){objBackLink.href=document.referrer;objBackLink.addEventListener('click',objEvent=>{if(history.length>1){objEvent.preventDefault();history.back();}});}
+  </script>
+</body>
+</html>

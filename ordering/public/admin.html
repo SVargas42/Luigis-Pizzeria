@@ -18,23 +18,21 @@
   </style>
   <style>
     header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
-    .admin-header-links{grid-column:1;grid-row:1;display:flex;flex-wrap:wrap;gap:14px}
     .staff-heading{grid-column:2;grid-row:1;text-align:center}
     .staff-heading .intro{margin:7px 0 0}
     .page-links{grid-column:3;grid-row:1;justify-content:flex-end}
     #ordering-average{grid-column:1/-1}
-    @media(max-width:760px){header{grid-template-columns:1fr;justify-items:center}.admin-header-links,.staff-heading,.page-links{grid-column:1;grid-row:auto;justify-content:center;text-align:center}}
+    @media(max-width:760px){header{grid-template-columns:1fr;justify-items:center}.staff-heading,.page-links{grid-column:1;grid-row:auto;justify-content:center;text-align:center}}
   </style>
 </head>
 <body>
-  <header><nav class="admin-header-links" aria-label="Staff settings"><a href="/admin/accounts">Manage accounts</a><a id="admin-account-settings" href="/account">Account settings</a></nav><div class="staff-heading"><h1 id="staff-title">Luigi’s staff desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Admin pages"><a id="orders-page-link" href="/admin?tab=current">Orders</a><a id="analytics-page-link" href="/admin/analytics?tab=ordering">Analytics</a><a href="/">Return to Home</a></nav></header>
+  <header><span aria-hidden="true"></span><div class="staff-heading"><h1 id="staff-title">Luigi’s Order Desk</h1><p class="intro">Orders and business insights</p></div><nav class="page-links" aria-label="Page navigation"><a id="go-back" href="/admin/management">Go back</a><a href="/">Return to Home</a></nav></header>
   <main>
     <p class="message" id="message" role="status" aria-live="polite"></p>
     <div class="tabs" id="orders-tabs" role="tablist" aria-label="Order workspace">
       <button class="tab" role="tab" id="tab-current" aria-controls="panel-current" aria-selected="true" tabindex="0" data-panel="current">Current Orders</button>
       <button class="tab" role="tab" id="tab-past" aria-controls="panel-past" aria-selected="false" tabindex="-1" data-panel="past">Past Orders</button>
       <button class="tab" role="tab" id="tab-customers" aria-controls="panel-customers" aria-selected="false" tabindex="-1" data-panel="customers">Customers</button>
-      <button class="tab" role="tab" id="tab-menu" aria-controls="panel-menu" aria-selected="false" tabindex="-1" data-panel="menu">Edit Menu</button>
     </div>
     <div class="tabs" id="analytics-tabs" role="tablist" aria-label="Analytics categories" hidden>
       <button class="tab" role="tab" id="tab-ordering" aria-controls="panel-ordering" aria-selected="true" tabindex="0" data-panel="ordering">Ordering Analytics</button>
@@ -72,8 +70,8 @@
       <form class="search-row" id="search"><label for="query">Search customers</label><input id="query" maxlength="100" autocomplete="off" placeholder="Email or last name"><button class="btn btn-primary" type="submit">Search</button></form>
       <div class="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Orders</th><th scope="col">Order value</th><th scope="col">Last order</th></tr></thead><tbody id="customers"></tbody></table></div>
     </section>
-    <section class="panel" role="tabpanel" id="panel-menu" aria-labelledby="tab-menu" tabindex="0" hidden>
-      <div class="toolbar"><div><h2>Menu and pricing</h2><p>Add or edit menu items. Removed items disappear from the customer menu; past orders stay unchanged.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
+    <section class="panel" id="panel-menu" aria-labelledby="menu-page-heading" tabindex="0" hidden>
+      <div class="toolbar"><div><h2 id="menu-page-heading">Menu</h2><p>Add or edit menu items. Removed items disappear from the customer menu; past orders stay unchanged.</p></div><button class="btn" type="button" id="refresh-menu">Refresh menu</button></div>
       <form id="add-menu-form" class="menu-add-form"><label for="new-menu-category">Item type<input id="new-menu-category" list="menu-category-options" value="Pizza size" maxlength="20" pattern="[A-Za-z][A-Za-z0-9 ]{0,19}" title="Use letters, numbers and spaces." required><datalist id="menu-category-options"><option value="Pizza size"></option><option value="Topping"></option><option value="Side"></option><option value="Drink"></option><option value="Drink size"></option></datalist></label><label for="new-menu-name">Item name<input id="new-menu-name" maxlength="60" required autocomplete="off"></label><label for="new-menu-price">Price (dollars)<input id="new-menu-price" type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" required></label><label class="menu-description-field" for="new-menu-description">Description (optional)<textarea id="new-menu-description" maxlength="1000" rows="3"></textarea></label><button class="btn btn-primary" type="submit" id="add-menu-item">Add item</button></form>
       <p class="hint">Drink names can have an optional price adjustment. Drink size prices apply to every drink.</p>
       <p class="sr-status" id="menu-message" role="status" aria-live="polite"></p>
@@ -90,21 +88,24 @@
     const money = nCents => '$' + (Number(nCents) / 100).toFixed(2);
     const bDemoMode=false;
     const bAnalyticsPage=location.pathname==='/admin/analytics';
+    const bMenuPage=location.pathname==='/admin/menu';
+    const bOrdersPage=!bAnalyticsPage&&!bMenuPage;
+    const objBackLink=$('go-back');
+    if(document.referrer&&new URL(document.referrer).origin===location.origin)objBackLink.href=document.referrer;
+    const bBackReferrer=objBackLink.href!==location.origin+'/admin/management';
+    if(bBackReferrer)objBackLink.addEventListener('click',objEvent=>{if(history.length>1){objEvent.preventDefault();history.back();}});
+    else objBackLink.href='/admin/management';
     const objDemoState=bDemoMode?createDemoAdminState():null;
     const objPageQuery=new URLSearchParams(location.search);
-    $('orders-page-link').href=`/admin${bDemoMode?'?tab=current':''}`;
-    $('analytics-page-link').href=`/admin/analytics${bDemoMode?'?tab=ordering':''}`;
-    $('orders-page-link').setAttribute('aria-current',String(!bAnalyticsPage));
-    $('analytics-page-link').setAttribute('aria-current',String(bAnalyticsPage));
-    $('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':'Luigi’s Order Desk';
-    $('admin-account-settings').hidden=bAnalyticsPage;
-    $('orders-tabs').hidden=bAnalyticsPage;
+    $('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':bMenuPage?'Luigi’s Menu':'Luigi’s Order Desk';
+    $('orders-tabs').hidden=!bOrdersPage;
     $('analytics-tabs').hidden=!bAnalyticsPage;
     for(const objPanel of document.querySelectorAll('[role="tabpanel"]')){
       const bPanelAnalytics=['panel-ordering','panel-employees','panel-business'].includes(objPanel.id);
-      const bPageMatch=bAnalyticsPage===bPanelAnalytics;
+      const bPanelMenu=objPanel.id==='panel-menu';
+      const bPageMatch=bPanelMenu?bMenuPage:bPanelAnalytics?bAnalyticsPage:bOrdersPage;
       objPanel.hidden=!bPageMatch;
-      objPanel.classList.toggle('active',bPageMatch&&objPanel.id===(bAnalyticsPage?'panel-ordering':'panel-current'));
+      objPanel.classList.toggle('active',bPageMatch&&objPanel.id===(bAnalyticsPage?'panel-ordering':bMenuPage?'panel-menu':'panel-current'));
     }
     const objStatusLabels = {order_received:'Order received',order_confirmed:'Order confirmed',preparing_order:'Preparing',cooking_order:'Cooking',order_ready:'Ready',received:'Order received',preparing:'In the oven',ready:'Ready for pickup',completed:'Picked up',cancelled:'Cancelled'};
     const objNextStatuses = {order_received:['order_confirmed'],order_confirmed:['preparing_order'],preparing_order:['cooking_order'],cooking_order:['order_ready'],order_ready:['completed'],received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['completed','cancelled'],completed:[],cancelled:[]};
@@ -273,7 +274,6 @@
       if(objTab.dataset.panel==='current')loadOrders('current');
       if(objTab.dataset.panel==='past')loadOrders('past');
       if(objTab.dataset.panel==='customers')loadCustomers();
-      if(objTab.dataset.panel==='menu')loadMenu();
       if(objTab.dataset.panel==='ordering')loadOrderingAnalytics();
       if(objTab.dataset.panel==='employees')loadEmployees();
       if(objTab.dataset.panel==='business')loadBusinessData();
@@ -565,16 +565,16 @@
     }
     if(bDemoMode)announce('Dashboard ready.');
     const strInitialTab=objPageQuery.get('tab');
-    const arrValidTabs=bAnalyticsPage?['ordering','employees','business']:['current','past','customers','menu'];
+    const arrValidTabs=bAnalyticsPage?['ordering','employees','business']:['current','past','customers'];
     const objInitialTab=arrValidTabs.includes(strInitialTab)?$(`tab-${strInitialTab}`):$(`tab-${bAnalyticsPage?'ordering':'current'}`);
-    if(!bDemoMode&&!bAnalyticsPage){
+    if(!bDemoMode&&bOrdersPage){
       const objPause=textElement('button','Pause automatic order updates','btn btn-outline-secondary');objPause.type='button';objPause.setAttribute('aria-pressed','false');
       objPause.addEventListener('click',()=>{bOrderUpdatesPaused=!bOrderUpdatesPaused;objPause.setAttribute('aria-pressed',String(bOrderUpdatesPaused));objPause.textContent=bOrderUpdatesPaused?'Resume automatic order updates':'Pause automatic order updates';});
       $('panel-current').prepend(objPause);
     }
-    setTab(objInitialTab);
+    if(bMenuPage)loadMenu();else setTab(objInitialTab);
     // Avoid replacing focused controls or an unsaved estimate while polling.
-    setInterval(()=>{if(!bOrderUpdatesPaused&&!bDemoMode&&!bAnalyticsPage&&!document.hidden&&!$('panel-current').hidden&&!$('edit-dialog').open&&!$('current-orders').contains(document.activeElement))loadOrders('current',true);},5000);
+    setInterval(()=>{if(!bOrderUpdatesPaused&&!bDemoMode&&bOrdersPage&&!document.hidden&&!$('panel-current').hidden&&!$('edit-dialog').open&&!$('current-orders').contains(document.activeElement))loadOrders('current',true);},5000);
   </script>
 </body>
 </html>

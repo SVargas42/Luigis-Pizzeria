@@ -198,7 +198,7 @@ const server = http.createServer(async(req,res)=>{
     return send(res,200,{items:arrItems,totalCents:nTotal});
    }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
-  const pages={'/staff':'staff.html','/account':'account.html','/admin/accounts':'account.html','/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html'};
+  const pages={'/staff':'staff.html','/account':'account.html','/admin/accounts':'account.html','/track':'tracker.html','/':'index.html','/admin':'admin.html','/admin/analytics':'admin.html','/admin/menu':'admin.html','/admin/management':'management.html'};
   if (req.method==='GET' && pages[url.pathname]) {
    const html=await readFile(new URL(url.pathname==='/'?'../index.html':`./public/${pages[url.pathname]}`,import.meta.url));
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(html);

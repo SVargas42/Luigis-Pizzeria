@@ -9,12 +9,15 @@ const strScript=strHtml.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1]
 test('staff screen script parses and includes all requested workspace tabs',()=>{
  assert.ok(strScript);
  new vm.Script(strScript.replace(/^ *import .*;\r?\n/gm,'').trim());
- for(const strTab of ['Current Orders','Past Orders','Ordering Analytics','Employee Data','Business Data','Customers','Menu and pricing'])assert.ok(strHtml.includes(strTab));
+ for(const strTab of ['Current Orders','Past Orders','Ordering Analytics','Employee Data','Business Data','Customers','Menu'])assert.ok(strHtml.includes(strTab));
  assert.ok(strHtml.includes('aria-selected="true"'));
  assert.ok(!/synthetic|sample data only|school project/i.test(strHtml));
  assert.ok(strScript.includes('const bDemoMode=false;'));
  assert.ok(strScript.includes('handleDemoAdminRequest'));
- assert.ok(strHtml.includes('href="/admin/analytics?tab=ordering"'));
+ assert.ok(strHtml.includes('href="/admin/management"'));
+ assert.ok(!strHtml.includes('id="tab-menu"'));
+ assert.ok(strHtml.includes("location.pathname==='/admin/menu'"));
+ assert.ok(strHtml.includes("if(bMenuPage)loadMenu();else setTab(objInitialTab)"));
  assert.ok(strHtml.includes('id="edit-items-editor"'));
  assert.ok(!strHtml.includes('id="edit-items"'));
  assert.ok(!strHtml.includes('Accessible comparison values'));
@@ -22,7 +25,7 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
  assert.ok(strScript.includes("setAttribute('role','img')"));
  assert.ok(strScript.includes('performance-low')&&strScript.includes('performance-mid')&&strScript.includes('performance-high'));
  assert.ok(strScript.includes('Drink size · ${objRow.name}')&&strScript.includes('Drink · ${objRow.name}'));
- assert.ok(strScript.includes("objTab.dataset.panel==='menu'"));
+ assert.ok(!strScript.includes("objTab.dataset.panel==='menu'"));
  assert.ok(strScript.includes("objQuantity.type='number'"));
 });
 
@@ -64,8 +67,9 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
  assert.equal(arrRequests.at(-1).strPath,'/api/employee/orders/7/complete');assert.equal(arrRequests.at(-1).method,'POST');
 });
 
-test('admin pages center the desk title and keep account settings off analytics',()=>{
+test('admin pages share a centered standard header and keep only back and home links',()=>{
  assert.ok(strHtml.includes('.staff-heading{grid-column:2;grid-row:1;text-align:center}'));
- assert.ok(strHtml.includes("$('admin-account-settings').hidden=bAnalyticsPage"));
+ assert.ok(strHtml.includes('aria-label="Page navigation"><a id="go-back"'));
+ assert.ok(strHtml.includes("$('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':bMenuPage?'Luigi’s Menu':'Luigi’s Order Desk'"));
  assert.ok(!strHtml.includes('ordering-forecast'));assert.ok(!strScript.includes("['forecast','ordering-forecast']"));
 });

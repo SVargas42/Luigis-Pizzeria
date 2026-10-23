@@ -60,8 +60,8 @@ test('unsupported category names cannot resolve inherited object properties',asy
  assert.equal(vm.runInContext('Object.hasOwn(prices,"undefined")',objHarness.objContext),false);
 });
 
-test('admin homepage analytics link opens its separate analytics page',()=>{
- assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
+test('admin homepage opens the Management Settings hub',()=>{
+ assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/management">Management Settings/);
 });
 
 test('worker Orders navigation opens the kitchen queue without revealing admin analytics',()=>{
