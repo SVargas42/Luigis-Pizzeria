@@ -24,4 +24,4 @@ test('profile offers locked email and only the requested three actions',()=>{
  assert.ok(strScript.includes("$('profile-actions').hidden=strMode!=='profile'"));
 });
 test('account management begins at its focused Account Management heading',()=>{assert.ok(strHtml.includes('id="management-title" tabindex="-1">Account Management'));assert.ok(strScript.includes("$('account-home-link').hidden=true;$('account-actions').hidden=true"));});
-test('account management includes the restored welcoming photo banner',()=>{assert.ok(strHtml.includes('class="management-banner"'));assert.ok(strHtml.includes('Luigi’s Pizza · Made with amore'));});
+test('account management reuses the standard pizza-photo hero banner',()=>{assert.ok(strHtml.includes('class="site-hero"'));assert.ok(strHtml.includes('hero-kicker'));assert.ok(strHtml.includes('photo-1513104890138-7c749659a591'));assert.ok(strHtml.includes('id="management-title" tabindex="-1">Account Management'));});
