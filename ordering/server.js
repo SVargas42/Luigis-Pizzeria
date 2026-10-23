@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import mariadb from 'mariadb';
 import Stripe from 'stripe';
 import {createPaymentService} from './payments.js';
-import {normalizeEditableItems,validateOrder} from './validation.js';
+import {normalizeEditableItems} from './validation.js';
 import {canTransitionStatus,orderAttention} from './domain.js';
 import {identityIsConfigured,resolveIdentity} from './identity.js';
 import {createAccountService,deliverAccountMail} from './accounts.js';
@@ -95,11 +95,11 @@ const server = http.createServer(async(req,res)=>{
   }
   const bLifecycleRoute=(req.method==='POST'&&url.pathname==='/api/orders') || /^\/api\/orders\/[0-9a-f]+\/track$/.test(url.pathname) || url.pathname.startsWith('/api/employee/orders/');
   if(bLifecycleRoute){
-   if(url.pathname.startsWith('/api/employee/')&&!await isAllowedStaffRequest(req,url)){
-    return send(res,403,{error:'Administrator account required'});
+   const objActor=await resolveIdentity(req);
+   if(url.pathname.startsWith('/api/employee/')&&(!['admin','worker'].includes(objActor?.role)||!canAccessStaffRoute(objActor.role,url,req.method))){
+    return send(res,403,{error:'A worker or administrator account is required.'});
    }
    let objSubmit=['POST','PATCH'].includes(req.method)?await body(req):undefined;
-   const objActor=await resolveIdentity(req);
    if(req.method==='POST'&&url.pathname==='/api/orders'){
     if(objSubmit.paymentMethod!=='in_store')return send(res,400,{error:'Use Stripe checkout for online payments.'});
     try{await objPayments.reserveCheckoutKey(objSubmit.requestKey,'pickup',objActor);}catch(objError){return send(res,objError.status||503,{error:objError.status?objError.message:'Checkout reservation unavailable.'});}
@@ -109,7 +109,7 @@ const server = http.createServer(async(req,res)=>{
    const strPayload=objSubmit?JSON.stringify(objSubmit):undefined;
    // Only the local lifecycle service receives staff credentials; never forward a client-controlled host.
    const objResponse=await fetch(new URL(url.pathname,process.env.LIFECYCLE_URL||'http://127.0.0.1:8000'),{
-    method:req.method,headers:{'Content-Type':'application/json',...(url.pathname.startsWith('/api/employee/')?{'X-Luigi-Actor':objActor.email,Authorization:'Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64')}:{})},
+    method:req.method,headers:{'Content-Type':'application/json',...(url.pathname.startsWith('/api/employee/')?{'X-Luigi-Actor':objActor.email,Cookie:req.headers.cookie||'',Authorization:'Basic '+Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASSWORD}`).toString('base64')}:{})},
     body:strPayload,signal:AbortSignal.timeout(12000)
    });
    const objResult=await objResponse.json();

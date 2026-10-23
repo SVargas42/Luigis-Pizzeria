@@ -12,11 +12,12 @@ export function canonicalCheckout(objPayload,objIdentity){
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(objPayload?.requestKey||''))fail(400,'Invalid checkout key.');
  if(!hasToken(objPayload.checkoutToken))fail(400,'Invalid checkout access token.');
  for(const strKey of ['pizzas','sides','drinks'])if(!Array.isArray(objPayload[strKey])||objPayload[strKey].length>20)fail(400,'Invalid order selections.');
- return {requestKey:objPayload.requestKey,customer:objCustomer,pizzas:objPayload.pizzas.map(objPizza=>({size:objPizza?.size,toppings:Array.isArray(objPizza?.toppings)?[...objPizza.toppings].sort():null})),sides:objPayload.sides.map(objSide=>({name:objSide?.name,quantity:objSide?.quantity})),drinks:objPayload.drinks.map(objDrink=>({name:objDrink?.name,size:objDrink?.size,quantity:objDrink?.quantity}))};
+ const arrSides=objPayload.sides.map(objSide=>({name:objSide?.name,quantity:objSide?.quantity,...(objSide?.size==null?{}:{size:objSide.size})}));
+ return {requestKey:objPayload.requestKey,customer:objCustomer,pizzas:objPayload.pizzas.map(objPizza=>({size:objPizza?.size,toppings:Array.isArray(objPizza?.toppings)?[...objPizza.toppings].sort():null})),sides:arrSides,drinks:objPayload.drinks.map(objDrink=>({name:objDrink?.name,size:objDrink?.size,quantity:objDrink?.quantity}))};
 }
-export function makeQuote(objPayload,mapMenu,nTaxBasisPoints){
+export function makeQuote(objPayload,mapMenu,nTaxBasisPoints,arrSideVariations=[]){
  if(!Number.isInteger(nTaxBasisPoints)||nTaxBasisPoints<0||nTaxBasisPoints>10000)fail(503,'Tax configuration is invalid.');
- let objData;try{objData=validateOrder(objPayload,mapMenu);}catch{fail(400,'Please check the order selections.');}
+ let objData;try{objData=validateOrder(objPayload,mapMenu,arrSideVariations);}catch{fail(400,'Please check the order selections.');}
  const nTax=Math.floor((objData.total*nTaxBasisPoints+5000)/10000),nTotal=objData.total+nTax;
  if(!Number.isSafeInteger(nTotal)||nTotal<50||nTotal>99999999)fail(400,'Online order total must be between $0.50 and $999,999.99.');
  return {customer:objData.customer,items:objData.items,subtotalCents:objData.total,taxCents:nTax,totalCents:nTotal};
@@ -56,7 +57,7 @@ export function createPaymentService(objPool,objStripe,objConfig){
  async function receipt(objConnection,nOrderId){
   const [objOrder]=await objConnection.query('SELECT * FROM orders WHERE id=?',[nOrderId]);
   if(!objOrder)fail(503,'Paid receipt is temporarily unavailable.');
-  const arrItems=await objConnection.query('SELECT kind,description,quantity,unit_price_cents AS unit FROM order_items WHERE order_id=? ORDER BY id',[nOrderId]);
+  const arrItems=await objConnection.query('SELECT kind,description,quantity,unit_price_cents AS unit,size FROM order_items WHERE order_id=? ORDER BY id',[nOrderId]);
   return {orderId:objOrder.id,orderNumber:`LP-${objOrder.id}`,customer:{name:objOrder.customer_name,email:objOrder.customer_email,phone:objOrder.customer_phone},items:arrItems,subtotalCents:objOrder.subtotal_cents,taxCents:objOrder.tax_cents,totalCents:objOrder.total_cents,paymentMethod:'online',paymentStatus:objOrder.payment_status,refundedCents:objOrder.refunded_cents||0,trackerUrl:`${strOrigin}/track?token=${objOrder.tracking_token}`};
  }
  async function attachSession(objPayment){
@@ -71,13 +72,21 @@ export function createPaymentService(objPool,objStripe,objConfig){
   return objSession;
  }
  async function createCheckout(objPayload,objIdentity){
-  requireEnabled();const objCanonical=canonicalCheckout(objPayload,objIdentity),strInputHash=digest(JSON.stringify(objCanonical));
+  requireEnabled();const objCanonical=canonicalCheckout(objPayload,objIdentity);
+  // Preserve legacy Medium retry hashes without dropping the size used for pricing.
+  const arrHashSides=objCanonical.sides.map(objSide=>{
+   const {size:strSize,...objLegacySide}=objSide;
+   return objSide.name==='Breadsticks'&&strSize==='Medium'?objLegacySide:objSide;
+  });
+  const strInputHash=digest(JSON.stringify({...objCanonical,sides:arrHashSides}));
   await reserveCheckoutKey(objCanonical.requestKey,'stripe',objIdentity);
   let [objExisting]=await objPool.query('SELECT * FROM stripe_payments WHERE request_key=?',[objCanonical.requestKey]);
   if(objExisting){authorize(objExisting,objPayload.checkoutToken,objIdentity);if(objExisting.input_hash!==strInputHash)fail(409,'Checkout selections changed. Resume the original payment or start a new order.');}
   else{
    const arrMenu=await objPool.query('SELECT category,name,price_cents FROM menu_prices WHERE is_active = 1');
-   const objQuote=makeQuote(objCanonical,new Map(arrMenu.map(objRow=>[`${objRow.category}:${objRow.name}`,Number(objRow.price_cents)])),objConfig.taxBasisPoints);
+   // Include inactive variations so removed sizes cannot fall back to the base price.
+   const arrSideVariations=await objPool.query("SELECT name,size,price_cents,is_active FROM menu_variations WHERE category='side'");
+   const objQuote=makeQuote(objCanonical,new Map(arrMenu.map(objRow=>[`${objRow.category}:${objRow.name}`,Number(objRow.price_cents)])),objConfig.taxBasisPoints,arrSideVariations);
    const strId=randomUUID(),nExpires=Math.floor(Date.now()/1000)+3600;
    const objParams={mode:'payment',customer_email:objQuote.customer.email,client_reference_id:strId,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey},payment_intent_data:{receipt_email:objQuote.customer.email,metadata:{integration:'luigi-checkout-v2',payment_id:strId,request_key:objCanonical.requestKey}},success_url:`${strOrigin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${strOrigin}/?checkout=cancelled`,expires_at:nExpires,line_items:objQuote.items.map(objItem=>({price_data:{currency:'usd',unit_amount:objItem.unit,product_data:{name:objItem.description}},quantity:objItem.quantity}))};
    if(objQuote.taxCents)objParams.line_items.push({price_data:{currency:'usd',unit_amount:objQuote.taxCents,product_data:{name:'Order tax'}},quantity:1});
@@ -105,7 +114,7 @@ export function createPaymentService(objPool,objStripe,objConfig){
     await objConnection.query('INSERT INTO customers(first_name,last_name,email,phone) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[objCustomer.firstName,objCustomer.lastName,objCustomer.email,objCustomer.phone]);
     const [objCustomerRow]=await objConnection.query('SELECT id FROM customers WHERE email=?',[objCustomer.email]);
     const objOrder=await objConnection.query("INSERT INTO orders(request_key,customer_id,customer_name,customer_email,customer_phone,total_cents,payment_method,stripe_session_id,stripe_payment_intent_id,tracking_token,tracking_status,payment_status,subtotal_cents,tax_cents) VALUES(?,?,?,?,?,?,'online',?,?,?,'order_received','paid',?,?)",[objPayment.request_key,objCustomerRow.id,`${objCustomer.firstName} ${objCustomer.lastName}`,objCustomer.email,objCustomer.phone,objQuote.totalCents,objSession.id,objSession.payment_intent,randomBytes(32).toString('hex'),objQuote.subtotalCents,objQuote.taxCents]);
-    for(const objItem of objQuote.items)await objConnection.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents) VALUES(?,?,?,?,?)',[objOrder.insertId,objItem.kind,objItem.description,objItem.quantity,objItem.unit]);
+    for(const objItem of objQuote.items)await objConnection.query('INSERT INTO order_items(order_id,kind,description,quantity,unit_price_cents,size) VALUES(?,?,?,?,?,?)',[objOrder.insertId,objItem.kind,objItem.description,objItem.quantity,objItem.unit,objItem.size??null]);
     await objConnection.query("INSERT INTO order_events(order_id,actor_email,event_type,to_status,details) VALUES(?,?,'created','received','Stripe payment verified')",[objOrder.insertId,objCustomer.email]);
     await objConnection.query("UPDATE stripe_payments SET stripe_session_id=?,stripe_payment_intent_id=?,state='paid',order_id=? WHERE id=?",[objSession.id,objSession.payment_intent,objOrder.insertId,objPayment.id]);
     objPayment.order_id=Number(objOrder.insertId);

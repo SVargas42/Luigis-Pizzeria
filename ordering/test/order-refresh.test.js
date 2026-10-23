@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const strHtml=readFileSync(new URL('../public/admin.html',import.meta.url),'utf8');
-const strLoad=strHtml.slice(strHtml.indexOf('    async function loadOrders('),strHtml.indexOf('    async function changeStatus('));
+const strLoad=strHtml.slice(strHtml.indexOf('    const mapOrderSnapshots='),strHtml.indexOf('    async function changeStatus('));
 const strHandlers=strHtml.slice(strHtml.indexOf("    document.querySelectorAll('[data-refresh]')"),strHtml.indexOf('    async function loadCustomers('));
 
 function fixture(){

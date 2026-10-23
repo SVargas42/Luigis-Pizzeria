@@ -31,6 +31,99 @@ function harness(){
  return {objStore,objService,objInput,objStripe,mapSessions,paid,event,setRefunded(nValue){nRefunded=nValue},get calls(){return nCalls}};
 }
 
+for(const [strSize,nUnit] of [[undefined,500],['Small',400],['Medium',500],['Large',600]]){
+ test(`Stripe quotes and records Breadsticks ${strSize||'default Medium'} at the database price`,async()=>{
+  const objHarness=harness();
+  objHarness.objInput.sides=[{name:'Breadsticks',...(strSize===undefined?{}:{size:strSize}),quantity:2,unit_price_cents:1}];
+  const objResult=await objHarness.objService.createCheckout(objHarness.objInput,null);
+  const objQuote=JSON.parse(objHarness.objStore.state.payments[0].quote_json);
+  const objSide=objQuote.items.find(objItem=>objItem.kind==='side');
+  assert.equal(objSide.unit,nUnit);assert.equal(objSide.size,strSize||'Medium');
+  assert.equal(objSide.description,`Breadsticks (${strSize||'Medium'})`);
+  assert.equal(objQuote.subtotalCents,1150+nUnit*2);
+  const nTax=Math.floor((objQuote.subtotalCents*825+5000)/10000);
+  assert.equal(objResult.totalCents,objQuote.subtotalCents+nTax);
+  const objParams=JSON.parse(objHarness.objStore.state.payments[0].params_json);
+  assert.equal(objParams.line_items[1].price_data.unit_amount,nUnit);
+  assert.equal(objHarness.objStore.state.orders.length,0);
+  objHarness.paid();
+  const objPaid=await objHarness.objService.checkoutStatus(objHarness.objInput,null);
+  const objSaved=objHarness.objStore.state.items.find(objItem=>objItem.kind==='side');
+  assert.equal(objSaved.size,strSize||'Medium');assert.equal(objSaved.unit,nUnit);
+  assert.equal(objPaid.receipt.items.find(objItem=>objItem.kind==='side').size,strSize||'Medium');
+  assert.ok(objHarness.objStore.state.mail[0].message.includes(`Breadsticks (${strSize||'Medium'})`));
+ });
+}
+
+test('Stripe validates unavailable sizes and does not fall back to a base price',async()=>{
+ for(const strSize of ['Tiny','small','',3]){
+  const objHarness=harness();objHarness.objInput.sides=[{name:'Breadsticks',size:strSize,quantity:1}];
+  await assert.rejects(objHarness.objService.createCheckout(objHarness.objInput,null),objError=>objError.status===400);
+  assert.equal(objHarness.calls,0);assert.equal(objHarness.objStore.state.payments.length,0);
+ }
+ for(const strSize of [undefined,'Small','Medium','Large']){
+  const objHarness=harness();objHarness.objStore.arrSideVariations.forEach(objVariation=>objVariation.is_active=0);
+  objHarness.objInput.sides=[{name:'Breadsticks',...(strSize===undefined?{}:{size:strSize}),quantity:1}];
+  await assert.rejects(objHarness.objService.createCheckout(objHarness.objInput,null),objError=>objError.status===400);
+  assert.equal(objHarness.calls,0);
+ }
+ const objMissing=harness();objMissing.objStore.arrSideVariations.length=0;
+ objMissing.objInput.sides=[{name:'Breadsticks',size:'Medium',quantity:1}];
+ await assert.rejects(objMissing.objService.createCheckout(objMissing.objInput,null),objError=>objError.status===400);
+ assert.equal(objMissing.calls,0);
+});
+
+test('a size change cannot reuse an existing Stripe checkout key',async()=>{
+ const objHarness=harness();objHarness.objInput.sides=[{name:'Breadsticks',size:'Small',quantity:1}];
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ objHarness.objInput.sides[0].size='Large';
+ await assert.rejects(objHarness.objService.createCheckout(objHarness.objInput,null),objError=>objError.status===409);
+ assert.equal(objHarness.calls,1);
+});
+
+test('Stripe uses updated database size prices and rejects invalid stored prices',async()=>{
+ const objHarness=harness();
+ objHarness.objStore.arrSideVariations.find(objVariation=>objVariation.size==='Small').price_cents=425;
+ objHarness.objInput.sides=[{name:'Breadsticks',size:'Small',quantity:1}];
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ assert.equal(JSON.parse(objHarness.objStore.state.payments[0].quote_json).items.find(objItem=>objItem.kind==='side').unit,425);
+ for(const nPrice of [0,-1,1.5,1000001,NaN]){
+  const objOther=harness();
+  objOther.objStore.arrSideVariations.find(objVariation=>objVariation.size==='Small').price_cents=nPrice;
+  objOther.objInput.sides=[{name:'Breadsticks',size:'Small',quantity:1}];
+  await assert.rejects(objOther.objService.createCheckout(objOther.objInput,null),objError=>objError.status===400);
+  assert.equal(objOther.calls,0);
+ }
+});
+
+test('quoted size prices survive later menu changes and paid webhook retries',async()=>{
+ const objHarness=harness();objHarness.objInput.sides=[{name:'Breadsticks',size:'Large',quantity:1}];
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ objHarness.objStore.arrSideVariations.forEach(objVariation=>{objVariation.price_cents=999;objVariation.is_active=0;});
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ const objSession=objHarness.paid();
+ await objHarness.event('checkout.session.completed',objSession);
+ await objHarness.event('checkout.session.completed',objSession);
+ assert.equal(objHarness.objStore.state.orders.length,1);
+ const objSide=objHarness.objStore.state.items.find(objItem=>objItem.kind==='side');
+ assert.equal(objSide.unit,600);assert.equal(objSide.size,'Large');
+ assert.equal(objHarness.objStore.state.mail.length,1);
+});
+
+test('legacy Medium checkout hashes and historical unsized receipts remain usable',async()=>{
+ const objHarness=harness();objHarness.objInput.sides=[{name:'Breadsticks',quantity:1}];
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ const objPayment=objHarness.objStore.state.payments[0],objQuote=JSON.parse(objPayment.quote_json);
+ for(const objItem of objQuote.items)if(objItem.kind==='side'){delete objItem.size;objItem.description='Breadsticks';}
+ objPayment.quote_json=JSON.stringify(objQuote);
+ objHarness.objInput.sides[0].size='Medium';
+ assert.equal(canonicalCheckout(objHarness.objInput,null).sides[0].size,'Medium');
+ await objHarness.objService.createCheckout(objHarness.objInput,null);
+ objHarness.paid();const objResult=await objHarness.objService.checkoutStatus(objHarness.objInput,null);
+ const objSide=objResult.receipt.items.find(objItem=>objItem.kind==='side');
+ assert.equal(objSide.size,null);assert.equal(objSide.description,'Breadsticks');assert.equal(objSide.unit,500);
+});
+
 test('new checkout uses Dashboard payment methods without the retired parameter',async()=>{
  const objHarness=harness(),fnCreate=objHarness.objStripe.checkout.sessions.create;
  objHarness.objStripe.checkout.sessions.create=async(objParams,objOptions)=>{

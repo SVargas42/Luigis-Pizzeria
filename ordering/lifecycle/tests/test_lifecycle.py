@@ -1,5 +1,6 @@
 """API tests with transactional SQLite adapter; target MySQL smoke test is separate."""
 import importlib
+import hashlib
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -44,8 +45,11 @@ def objHarness(monkeypatch):
     monkeypatch.setenv('TAX_BASIS_POINTS', '825')
     objConnection = sqlite3.connect(':memory:', check_same_thread=False, detect_types=sqlite3.PARSE_DECLTYPES)
     objConnection.row_factory = sqlite3.Row
+    objConnection.create_function('UTC_TIMESTAMP', 0, lambda: datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
     objConnection.executescript('''
         PRAGMA foreign_keys=ON;
+        CREATE TABLE accounts(id INTEGER PRIMARY KEY,role TEXT,email_verified_at TEXT,disabled_at TEXT);
+        CREATE TABLE account_sessions(token_hash TEXT PRIMARY KEY,account_id INTEGER REFERENCES accounts(id),expires_at TEXT);
         CREATE TABLE customers(id INTEGER PRIMARY KEY,first_name TEXT,last_name TEXT,email TEXT UNIQUE,phone TEXT);
         CREATE TABLE orders(id INTEGER PRIMARY KEY,request_key TEXT UNIQUE,customer_id INTEGER REFERENCES customers(id),customer_name TEXT,customer_email TEXT,customer_phone TEXT,total_cents INTEGER,payment_method TEXT,tracking_token TEXT UNIQUE,tracking_status TEXT,payment_status TEXT,subtotal_cents INTEGER,tax_cents INTEGER,estimated_pickup_time timestamp,status TEXT DEFAULT 'received',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE order_items(id INTEGER PRIMARY KEY,order_id INTEGER REFERENCES orders(id),kind TEXT,description TEXT,quantity INTEGER,unit_price_cents INTEGER,size TEXT);
@@ -56,6 +60,11 @@ def objHarness(monkeypatch):
         CREATE TABLE menu_variations(category TEXT,name TEXT,size TEXT,price_cents INTEGER,is_active INTEGER DEFAULT 1,PRIMARY KEY(category,name,size),FOREIGN KEY(category,name) REFERENCES menu_prices(category,name) ON UPDATE CASCADE ON DELETE RESTRICT);
         INSERT INTO menu_variations(category,name,size,price_cents) VALUES('side','Breadsticks','Small',400),('side','Breadsticks','Medium',500),('side','Breadsticks','Large',600);
     ''')
+    objConnection.execute("INSERT INTO accounts VALUES(1,'admin','2026-01-01',NULL)")
+    objConnection.execute('INSERT INTO account_sessions VALUES(?,1,?)',
+                          (hashlib.sha256(('a'*64).encode()).hexdigest(),
+                           (datetime.now(timezone.utc)+timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')))
+    objConnection.commit()
     @contextmanager
     def test_database():
         try:
@@ -68,6 +77,7 @@ def objHarness(monkeypatch):
     monkeypatch.setattr(objModule, 'database', test_database)
 
     with TestClient(objModule.app) as objClient:
+        objClient.cookies.set('luigi_session', 'a'*64)
         yield objClient, objConnection, arrMail
     objConnection.close()
 

@@ -1,5 +1,6 @@
 """Transactional lifecycle API sharing the existing Luigi's schema."""
 import logging
+import hashlib
 import os
 import re
 import secrets
@@ -146,6 +147,24 @@ def require_staff(objCredentials: HTTPBasicCredentials = Depends(objSecurity)):
         secrets.compare_digest(objCredentials.password.encode(), strPassword.encode())
     ):
         raise HTTPException(401, 'Staff credentials required', headers={'WWW-Authenticate': 'Basic'})
+
+
+def require_employee(objRequest: Request, objInternalAuth=Depends(require_staff)):
+    # The internal credential authenticates the proxy; the session identifies its user.
+    strToken = objRequest.cookies.get('luigi_session', '')
+    if not re.fullmatch(r'[a-f0-9]{64}', strToken):
+        raise HTTPException(401, 'A valid staff session is required')
+    with database() as objCursor:
+        objCursor.execute('''SELECT a.role FROM account_sessions s
+            JOIN accounts a ON a.id=s.account_id
+            WHERE s.token_hash=%s AND s.expires_at>UTC_TIMESTAMP()
+            AND a.disabled_at IS NULL AND a.email_verified_at IS NOT NULL''',
+            (hashlib.sha256(strToken.encode()).hexdigest(),))
+        objAccount = objCursor.fetchone()
+    if not objAccount:
+        raise HTTPException(401, 'A valid staff session is required')
+    if objAccount['role'] not in ('admin', 'worker'):
+        raise HTTPException(403, 'A worker or administrator account is required')
 
 
 @app.middleware('http')
@@ -382,7 +401,7 @@ def track_order(strToken: str):
     return {'orderNumber': f"LP-{objOrder['id']}", 'status': objOrder['tracking_status'], 'completed': objOrder['status'] == 'completed', 'cancelled': objOrder['status'] == 'cancelled', 'estimatedPickupTime': dtEstimate.isoformat() + 'Z' if dtEstimate else None}
 
 
-@app.get('/api/employee/orders/active', dependencies=[Depends(require_staff)])
+@app.get('/api/employee/orders/active', dependencies=[Depends(require_employee)])
 def active_orders():
     with database() as objCursor:
         objCursor.execute("SELECT id,customer_name,customer_email,customer_phone,status,tracking_status,payment_method,payment_status,total_cents,estimated_pickup_time,created_at,updated_at FROM orders WHERE status NOT IN ('completed','cancelled') ORDER BY id DESC LIMIT 500")
@@ -413,7 +432,7 @@ def lock_order(objCursor, nOrderId):
     return objOrder
 
 
-@app.patch('/api/employee/orders/{nOrderId}/status', dependencies=[Depends(require_staff)])
+@app.patch('/api/employee/orders/{nOrderId}/status', dependencies=[Depends(require_employee)])
 def advance_status(nOrderId: int, objChange: StatusChange, x_luigi_actor: str = Header(default="staff")):
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)
@@ -427,7 +446,7 @@ def advance_status(nOrderId: int, objChange: StatusChange, x_luigi_actor: str = 
     return {'status': objChange.status}
 
 
-@app.patch('/api/employee/orders/{nOrderId}/estimate', dependencies=[Depends(require_staff)])
+@app.patch('/api/employee/orders/{nOrderId}/estimate', dependencies=[Depends(require_employee)])
 def set_estimate(nOrderId: int, objEstimate: Estimate):
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)
@@ -437,7 +456,7 @@ def set_estimate(nOrderId: int, objEstimate: Estimate):
     return {'estimatedPickupTime': objEstimate.estimatedPickupTime.isoformat() + 'Z'}
 
 
-@app.post('/api/employee/orders/{nOrderId}/complete', dependencies=[Depends(require_staff)])
+@app.post('/api/employee/orders/{nOrderId}/complete', dependencies=[Depends(require_employee)])
 def complete_order(nOrderId: int, objCompletion: Completion, x_luigi_actor: str = Header(default="staff")):
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)

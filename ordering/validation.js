@@ -1,4 +1,4 @@
-export function validateOrder(objBody, mapMenu) {
+export function validateOrder(objBody, mapMenu, arrSideVariations=[]) {
  const failValidation = () => {throw new Error('Please check your customer details and order selections.');};
  const hasText = (strValue,nMaximum) => typeof strValue==='string' && strValue.trim().length>0 && strValue.trim().length<=nMaximum;
  const objCustomer=objBody?.customer;
@@ -22,7 +22,17 @@ export function validateOrder(objBody, mapMenu) {
  });
  for(const objSide of objBody.sides){
   if(!objSide) failValidation();
-  arrItems.push({kind:'side',description:objSide.name,quantity:getQuantity(objSide.quantity,99),unit:getPrice('side',objSide.name)});
+  let nUnit=getPrice('side',objSide.name);
+  const arrSizes=arrSideVariations.filter(objVariation=>objVariation.name===objSide.name);
+  const strSize=objSide.size??(arrSizes.some(objVariation=>objVariation.size==='Medium')?'Medium':'Regular');
+  if(typeof strSize!=='string'||!strSize.length||strSize.length>20)failValidation();
+  if(arrSizes.length){
+   const objVariation=arrSizes.find(objSize=>objSize.size===strSize);
+   if(!objVariation||Number(objVariation.is_active)!==1)failValidation();
+   nUnit=Number(objVariation.price_cents);
+   if(!Number.isSafeInteger(nUnit)||nUnit<=0||nUnit>1000000)failValidation();
+  }else if(strSize!=='Regular')failValidation();
+  arrItems.push({kind:'side',description:arrSizes.length?`${objSide.name} (${strSize})`:objSide.name,...(arrSizes.length?{size:strSize}:{}),quantity:getQuantity(objSide.quantity,99),unit:nUnit});
  }
  for(const objDrink of objBody.drinks){
   if(!objDrink || typeof objDrink.name!=='string') failValidation();

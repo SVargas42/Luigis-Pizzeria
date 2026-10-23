@@ -6,13 +6,13 @@ import {randomUUID} from 'node:crypto';
 
 const strHtml=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 const strScript=strHtml.match(/<script>([\s\S]*?)<\/script>/)[1];
-function createHarness(bFail=false) {
+function createHarness(bFail=false,arrMenuRows=[{category:'pizza',name:'Small',price_cents:1000},{category:'topping',name:'Cheese',price_cents:150},{category:'topping',name:'Pepperoni',price_cents:200}]) {
  const mapElements=new Map(),arrRequests=[];
  function createElement(){const setClasses=new Set();return {id:'',value:'',textContent:'',innerHTML:'',disabled:false,classList:{add(strName){setClasses.add(strName)},remove(strName){setClasses.delete(strName)},toggle(strName,bForce){const bAdd=bForce===undefined?!setClasses.has(strName):bForce;if(bAdd)setClasses.add(strName);else setClasses.delete(strName);return bAdd},contains(strName){return setClasses.has(strName)}},handlers:{},children:[],addEventListener(strType,fnHandler){this.handlers[strType]=fnHandler},querySelectorAll(){return []},querySelector(){return null},setAttribute(){},removeAttribute(){},focus(){},showModal(){this.open=true},close(){this.open=false;this.handlers.close?.()},checkValidity(){return true},reset(){},after(){},append(...arrChildren){this.children.push(...arrChildren)},replaceChildren(){this.children=[]}}}
  for(const strId of ['step-1','step-2','step-3','step-4']){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement);}
  const mapWindowListeners=new Map();
  const objStorage=new Map();const objContext={document:{getElementById(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;mapElements.set(strId,objElement)}return mapElements.get(strId)},querySelectorAll(strSelector){return strSelector==='[id^="step-"]'?[...mapElements.values()].filter(objElement=>objElement.id.startsWith('step-')):[]},querySelector(){return null},createElement},window:{scrollTo(){},matchMedia(){return {matches:true}},addEventListener(strType,fnListener){mapWindowListeners.set(strType,fnListener)},dispatchEvent(objEvent){mapWindowListeners.get(objEvent.type)?.(objEvent)}},CustomEvent:class{constructor(strType,objInit){this.type=strType;this.detail=objInit?.detail}},history:{replaceState(){}},location:{pathname:'/',search:'',href:'',assign(strUrl){this.href=strUrl}},sessionStorage:{setItem(k,v){objStorage.set(k,v)},getItem(k){return objStorage.get(k)||null},removeItem(k){objStorage.delete(k)}},URLSearchParams,crypto:{randomUUID},fetch:async(strPath,objOptions)=>{
-  if(strPath==='/api/menu')return {ok:true,json:async()=>[{category:'pizza',name:'Small',price_cents:1000},{category:'topping',name:'Cheese',price_cents:150},{category:'topping',name:'Pepperoni',price_cents:200}]};
+  if(strPath==='/api/menu')return {ok:true,json:async()=>arrMenuRows};
   if(strPath==='/api/payment/config')return {ok:true,json:async()=>({publishableKey:'pk_test_sample'})};
   if(strPath==='/api/session')return {ok:true,json:async()=>({authenticated:false,authReady:false,user:null})};
   if(strPath==='/api/auth/logout')return {ok:true,json:async()=>({message:'Signed out.'})};
@@ -25,6 +25,41 @@ function createHarness(bFail=false) {
  for(const [strId,strValue] of [['firstName','Ada'],['lastName','Lovelace'],['email','ada@example.com'],['phone','5551234567'],['payment-method','in_store']])objContext.document.getElementById(strId).value=strValue;
  return {mapElements,arrRequests,objContext};
 }
+test('custom categories do not block supported menu items or pickup checkout',async()=>{
+ const objHarness=createHarness(false,[
+  {category:'dessert',name:'Brownie',price_cents:400},
+  {category:'pizza',name:'Small',price_cents:1100},
+  {category:'topping',name:'Cheese',price_cents:175},
+  {category:'side',name:'Garlic Roll',price_cents:300},
+  {category:'drink',name:'Large',price_cents:350},
+  {category:'drink_name',name:'Water',price_cents:0}
+ ]);
+ await new Promise(fnResolve=>setImmediate(fnResolve));
+ assert.equal(objHarness.mapElements.get('start-order').disabled,false);
+ assert.equal(vm.runInContext('prices.pizza.Small',objHarness.objContext),11);
+ assert.equal(vm.runInContext('objToppingPrices.Cheese',objHarness.objContext),1.75);
+ assert.equal(vm.runInContext("prices.sides['Garlic Roll']",objHarness.objContext),3);
+ assert.equal(vm.runInContext('prices.drinks.Large',objHarness.objContext),3.5);
+ assert.equal(vm.runInContext('prices.beverages.Water',objHarness.objContext),0);
+ assert.ok(objHarness.mapElements.get('sides-list').innerHTML.includes('Garlic Roll'));
+ assert.ok(!objHarness.mapElements.get('sides-list').innerHTML.includes('Brownie'));
+ vm.runInContext("state.pizzas[0].size='Small'",objHarness.objContext);
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.equal(objHarness.arrRequests[0].pizzas[0].size,'Small');
+ assert.equal(vm.runInContext('state.step',objHarness.objContext),4);
+});
+
+test('unsupported category names cannot resolve inherited object properties',async()=>{
+ const objHarness=createHarness(false,[
+  ...['constructor','toString','__proto__'].map(strCategory=>({category:strCategory,name:'Unknown',price_cents:400})),
+  {category:'pizza',name:'Small',price_cents:1000}
+ ]);
+ await new Promise(fnResolve=>setImmediate(fnResolve));
+ assert.equal(objHarness.mapElements.get('start-order').disabled,false);
+ assert.equal(vm.runInContext('prices.pizza.Small',objHarness.objContext),10);
+ assert.equal(vm.runInContext('Object.hasOwn(prices,"undefined")',objHarness.objContext),false);
+});
+
 test('admin homepage analytics link opens its separate analytics page',()=>{
  assert.match(strHtml,/id="admin-analytics-link"[^>]+href="\/admin\/analytics\?tab=ordering"/);
 });
@@ -68,6 +103,18 @@ test('customer places pickup order and sees an itemized receipt and tracker',asy
  assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-12');
  assert.equal(/cardNumber|cvv|expiry/.test(JSON.stringify(objHarness.arrRequests[0])),false);
 });
+test('every Breadsticks size can reach Stripe checkout with its selected size',async()=>{
+ for(const strSize of ['Small','Medium','Large']){
+  const objHarness=createHarness();let objSubmitted;
+  objHarness.objContext.beginStripeCheckout=async objPayload=>{objSubmitted=JSON.parse(JSON.stringify(objPayload));};
+  vm.runInContext(`state.pizzas[0].size='Small';state.sides=[{name:'Breadsticks',size:'${strSize}',quantity:2}];`,objHarness.objContext);
+  objHarness.mapElements.get('payment-method').value='online';
+  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+  assert.equal(objSubmitted.sides[0].size,strSize);assert.equal(objSubmitted.sides[0].quantity,2);
+  assert.equal(objHarness.arrRequests.length,0);
+ }
+});
+
 test('failed submissions show an error and reuse the retry key',async()=>{
  const objHarness=createHarness(true);
  await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
