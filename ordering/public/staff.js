@@ -6,7 +6,12 @@ function staffMessage(strText){if(getStaffElement('staff-message').textContent!=
 function staffText(strTag,strText,strClass=''){const objElement=document.createElement(strTag);objElement.textContent=strText;if(strClass)objElement.className=strClass;return objElement;}
 async function staffApi(strPath,strMethod='GET',objBody){
  const objResponse=await fetch(strPath,{method:strMethod,cache:'no-store',...(objBody===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(objBody)})});
- const objResult=await objResponse.json();if(!objResponse.ok)throw Error(objResult.error||'Unable to update orders. Refresh before retrying.');return objResult;
+ const objResult=await objResponse.json();
+ if(!objResponse.ok){
+  const objError=new Error(objResult.error||'Unable to update orders. Refresh before retrying.');
+  objError.status=objResponse.status;throw objError;
+ }
+ return objResult;
 }
 function localEstimate(strValue){const dtValue=new Date(strValue);if(Number.isNaN(dtValue.getTime()))return '';return new Date(dtValue.getTime()-dtValue.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 function renderStaffOrders(arrOrders){
@@ -24,8 +29,37 @@ function renderStaffOrders(arrOrders){
   objAdvance.addEventListener('click',()=>changeStaffOrder(objAdvance,`/api/employee/orders/${objOrder.id}/${nStage===4?'complete':'status'}`,nStage===4?'POST':'PATCH',nStage===4?{expectedStatus:'order_ready'}:{expectedStatus:objOrder.tracking_status,status:arrStaffStages[nStage+1]}));objActions.append(objAdvance);objCard.append(objActions);
   const objEstimate=document.createElement('form');objEstimate.className='estimate-form';
   const objLabel=staffText('label','Estimated pickup time (your local time)'),objInput=document.createElement('input');objInput.type='datetime-local';objInput.id=`estimate-${objOrder.id}`;objInput.required=true;objInput.value=objOrder.estimated_pickup_time?localEstimate(objOrder.estimated_pickup_time):'';objLabel.htmlFor=objInput.id;
-  const objSave=staffText('button','Save pickup estimate','btn');objSave.type='submit';objEstimate.append(objLabel,objInput,objSave);
-  objEstimate.addEventListener('submit',objEvent=>{objEvent.preventDefault();const dtEstimate=new Date(objInput.value);if(Number.isNaN(dtEstimate.getTime())||dtEstimate.getTime()<=Date.now()){staffMessage('Choose a future pickup time.');objInput.focus();return;}changeStaffOrder(objSave,`/api/employee/orders/${objOrder.id}/estimate`,'PATCH',{estimatedPickupTime:dtEstimate.toISOString()});});objCard.append(objEstimate);objQueue.append(objCard);
+  // Handle invalid submissions ourselves so the warning always appears.
+  objEstimate.noValidate=true;
+  const updateEstimateMinimum=()=>{
+   const dtMinimum=new Date(Math.ceil(Date.now()/60000)*60000);
+   objInput.min=localEstimate(dtMinimum.toISOString());
+  };
+  updateEstimateMinimum();
+  for(const strEvent of ['focus','click','keydown'])objInput.addEventListener(strEvent,updateEstimateMinimum);
+  const objAlert=staffText('div','','alert alert-danger');
+  objAlert.id=`estimate-alert-${objOrder.id}`;objAlert.setAttribute('role','alert');objAlert.hidden=true;
+  objInput.setAttribute('aria-describedby',objAlert.id);
+  let nAlertTimer;
+  const showEstimateError=()=>{
+   clearTimeout(nAlertTimer);objInput.setAttribute('aria-invalid','true');objAlert.hidden=false;
+   objAlert.textContent='Invalid time: You cannot select a pickup time in the past.';objInput.focus();
+   nAlertTimer=setTimeout(()=>{objAlert.hidden=true;objAlert.textContent='';},3500);
+  };
+  const clearEstimateError=()=>{
+   clearTimeout(nAlertTimer);objAlert.hidden=true;objAlert.textContent='';objInput.removeAttribute('aria-invalid');
+  };
+  objInput.addEventListener('input',clearEstimateError);
+  const objSave=staffText('button','Save pickup estimate','btn');objSave.type='submit';objEstimate.append(objLabel,objInput,objSave,objAlert);
+  objEstimate.addEventListener('submit',objEvent=>{
+   objEvent.preventDefault();updateEstimateMinimum();
+   const dtEstimate=new Date(objInput.value);
+   if(!Number.isFinite(dtEstimate.getTime())||dtEstimate.getTime()<=Date.now()||!objInput.checkValidity()){
+    showEstimateError();return;
+   }
+   clearEstimateError();
+   changeStaffOrder(objSave,`/api/employee/orders/${objOrder.id}/estimate`,'PATCH',{estimatedPickupTime:dtEstimate.toISOString()},showEstimateError);
+  });objCard.append(objEstimate);objQueue.append(objCard);
  }
 }
 async function refreshStaffQueue(bForce=false){
@@ -35,10 +69,13 @@ async function refreshStaffQueue(bForce=false){
  catch(objError){staffMessage(objError.message);}
  finally{bStaffRefreshing=false;getStaffElement('staff-refresh').disabled=false;}
 }
-async function changeStaffOrder(objButton,strPath,strMethod,objBody){
+async function changeStaffOrder(objButton,strPath,strMethod,objBody,fnEstimateError){
  if(bStaffChanging)return;bStaffChanging=true;objButton.disabled=true;
  try{await staffApi(strPath,strMethod,objBody);await refreshStaffQueue(true);staffMessage('Order updated.');getStaffElement('staff-refresh').focus();}
- catch(objError){staffMessage(objError.message);}
+ catch(objError){
+  if(objError.status===400&&fnEstimateError)fnEstimateError();
+  else staffMessage(objError.message);
+ }
  finally{bStaffChanging=false;objButton.disabled=false;}
 }
 getStaffElement('staff-refresh').addEventListener('click',()=>refreshStaffQueue());

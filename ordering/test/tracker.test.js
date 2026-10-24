@@ -35,25 +35,25 @@ test('pickup estimate changes independently of status and unchanged polls do not
  objHarness.poll();await settle();assert.equal(nEstimateWrites,0);
  objHarness.objOrder.estimatedPickupTime='2026-10-22T20:30:00Z';
  objHarness.poll();await settle();
- assert.match(strEstimate,/Estimated pickup:/);assert.equal(nEstimateWrites,1);
+ assert.ok(strEstimate.includes(new Date(objHarness.objOrder.estimatedPickupTime).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})));assert.equal(nEstimateWrites,1);
  assert.equal(objHarness.getElement('tracker-message').textContent,'Order received');
  objHarness.poll();await settle();assert.equal(nEstimateWrites,1);
  objHarness.objOrder.estimatedPickupTime=null;objHarness.poll();await settle();
- assert.match(strEstimate,/Awaiting kitchen confirmation/);assert.equal(nEstimateWrites,2);
+ assert.equal(strEstimate,'Calculating...');assert.equal(nEstimateWrites,2);
 });
 test('tracker renders five stages, polls estimates and supports pause and manual refresh',async()=>{
  const objHarness=trackerHarness();await settle();
  assert.equal(objHarness.getElement('tracker-stages').children.length,5);
  assert.deepEqual(objHarness.getElement('tracker-stages').children.slice(2).map(objStep=>objStep.textContent),['Preparing','Cooking','Ready']);
  assert.equal(objHarness.getElement('tracker-progress').attrs['aria-valuenow'],'1');
- assert.match(objHarness.getElement('tracker-estimate').textContent,/Awaiting/);
+ assert.equal(objHarness.getElement('tracker-estimate').textContent,'Calculating...');
  objHarness.objOrder.status='cooking_order';objHarness.objOrder.estimatedPickupTime='2026-10-17T00:00:00Z';objHarness.poll();await settle();
  assert.equal(objHarness.getElement('tracker-progress').attrs['aria-valuenow'],'4');
  assert.equal(objHarness.getElement('tracker-message').textContent,'Cooking');
  assert.equal(objHarness.getElement('tracker-stages').children[3].textContent,'Cooking');
  assert.equal(objHarness.getElement('tracker-stages').children[3].attrs['aria-current'],'step');
  assert.equal(objHarness.getElement('tracker-fill').style.width,'80%');
- assert.match(objHarness.getElement('tracker-estimate').textContent,/Estimated pickup/);
+ assert.ok(objHarness.getElement('tracker-estimate').textContent.includes('2026'));
  objHarness.getElement('tracker-pause').handlers.click();objHarness.poll();await settle();assert.equal(objHarness.nRequests,2);
  await objHarness.getElement('tracker-refresh').handlers.click();assert.equal(objHarness.nRequests,3);
  objHarness.getElement('tracker-pause').handlers.click();objHarness.fail();objHarness.poll();await settle();assert.match(objHarness.getElement('tracker-message').textContent,/retry/);
@@ -76,4 +76,34 @@ test('cancelled orders have no active or completed stage and stop automatic poll
  assert.equal(objHarness.getElement('tracker-message').textContent,'This order was cancelled.');
  assert.ok(objHarness.getElement('tracker-stages').children.every(objStep=>objStep.className==='is-upcoming'));
  const nRequests=objHarness.nRequests;objHarness.poll();await settle();assert.equal(objHarness.nRequests,nRequests);
+});
+
+test('pickup estimate uses today in local time and handles invalid values',async()=>{
+ const objHarness=trackerHarness();await settle();
+ objHarness.objOrder.estimatedPickupTime=new Date().toISOString();objHarness.poll();await settle();
+ assert.match(objHarness.getElement('tracker-estimate').textContent,/^Today at /);
+ objHarness.objOrder.estimatedPickupTime='invalid';objHarness.poll();await settle();
+ assert.equal(objHarness.getElement('tracker-estimate').textContent,'Calculating...');
+});
+
+test('pickup estimate appears before progress and retains an accessible live region',()=>{
+ const strHtml=readFileSync(new URL('../public/tracker.html',import.meta.url),'utf8');
+ assert.equal((strHtml.match(/id="tracker-estimate"/g)||[]).length,1);
+ assert.ok(strHtml.indexOf('id="tracker-estimate"')<strHtml.indexOf('id="tracker-message"'));
+ assert.match(strHtml,/<h2>Estimated Pickup Time<\/h2>/);
+ assert.match(strHtml,/id="tracker-estimate" role="status" aria-live="polite" aria-atomic="true"/);
+});
+
+test('employee pickup minimum advances on keyboard, pointer and submit in local time',()=>{
+ const strHtml=readFileSync(new URL('../public/admin.html',import.meta.url),'utf8');
+ const strControl=strHtml.match(/const updateEstimateMinimum=\(\)=>\{[\s\S]*?for\(const strEvent of \['focus','click','keydown'\]\)objEstimate.addEventListener\(strEvent,updateEstimateMinimum\);/)[0];
+ let nNow=Date.now();const mapHandlers=new Map(),objEstimate={};
+ class TestDate extends Date{constructor(...arrArgs){super(...(arrArgs.length?arrArgs:[nNow]));}static now(){return nNow;}}
+ vm.runInNewContext(strControl,{Date:TestDate,objEstimate:{...objEstimate,addEventListener(strEvent,fnHandler){mapHandlers.set(strEvent,fnHandler);Object.defineProperty(objEstimate,'min',{get:()=>this.min,configurable:true});}}});
+ const expectedMinimum=()=>{const dtMinimum=new Date(Math.ceil(nNow/60000)*60000);return new Date(dtMinimum.getTime()-dtMinimum.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+ assert.equal(objEstimate.min,expectedMinimum());
+ for(const strEvent of ['focus','click','keydown']){nNow+=120000;mapHandlers.get(strEvent)();assert.equal(objEstimate.min,expectedMinimum());}
+ assert.match(strHtml,/objEvent.preventDefault\(\);updateEstimateMinimum\(\);/);
+ assert.ok(strHtml.includes('!objEstimate.checkValidity()'));
+ assert.ok(strHtml.includes('dtPickup.getTime()<=Date.now()'));
 });

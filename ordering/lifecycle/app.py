@@ -186,6 +186,13 @@ async def http_error(objRequest, objError):
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(objRequest, objError):
+    if (objRequest.method == 'PATCH'
+            and objRequest.url.path.startswith('/api/employee/orders/')
+            and objRequest.url.path.endswith('/estimate')):
+        return JSONResponse(
+            {'error': 'Enter a valid future pickup time with timezone.'},
+            status_code=400,
+        )
     if objRequest.url.path.startswith('/api/admin/menu'):
         return JSONResponse({'error': 'Check the menu type, name, description, whole-cent price and confirmation.'}, status_code=422)
     return JSONResponse(checkout_validation_error(objError), status_code=422)
@@ -448,6 +455,8 @@ def advance_status(nOrderId: int, objChange: StatusChange, x_luigi_actor: str = 
 
 @app.patch('/api/employee/orders/{nOrderId}/estimate', dependencies=[Depends(require_employee)])
 def set_estimate(nOrderId: int, objEstimate: Estimate):
+    if objEstimate.estimatedPickupTime <= datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(400, 'Pickup time must be in the future.')
     with database() as objCursor:
         objOrder = lock_order(objCursor, nOrderId)
         if objOrder['estimated_pickup_time'] != objEstimate.estimatedPickupTime:

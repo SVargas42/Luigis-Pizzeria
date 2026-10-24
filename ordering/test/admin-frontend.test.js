@@ -32,23 +32,35 @@ test('staff screen script parses and includes all requested workspace tabs',()=>
 });
 
 test('staff lifecycle controls submit sequential status, UTC estimate and archive requests',async()=>{
- const mapElements=new Map(),arrRequests=[];
+ const mapElements=new Map(),arrRequests=[],mapTimers=new Map();let nTimer=0,nResponseStatus=200;
  const objOrder={id:7,status:'received',tracking_status:'order_received',customer_name:'Ada',customer_email:'ada@example.com',customer_phone:'5551234567',total_cents:1000,created_at:'2026-10-16T20:00:00Z',updated_at:'2026-10-16T20:00:00Z',items:[],payment_method:'in_store',payment_status:'unpaid'};
- function createElement(){return {children:[],handlers:{},dataset:{},classList:{toggle(){}},append(...arrChildren){this.children.push(...arrChildren);},prepend(objChild){this.children.unshift(objChild);},replaceChildren(){this.children=[];},setAttribute(){},addEventListener(strEvent,fnHandler){this.handlers[strEvent]=fnHandler;},focus(){},contains(){return false;},querySelector(){return null;}};}
+ function createElement(){return {children:[],handlers:{},dataset:{},attrs:{},classList:{toggle(){},add(){}},checkValidity(){return Boolean(this.value)&&this.value>=this.min;},append(...arrChildren){this.children.push(...arrChildren);},prepend(objChild){this.children.unshift(objChild);},replaceChildren(){this.children=[];},setAttribute(strName,strValue){this.attrs[strName]=strValue;},removeAttribute(strName){delete this.attrs[strName];},addEventListener(strEvent,fnHandler){this.handlers[strEvent]=fnHandler;},focus(){this.bFocused=true;},contains(){return false;},querySelector(){return null;}};}
  function getElement(strId){if(!mapElements.has(strId)){const objElement=createElement();objElement.id=strId;if(strId.startsWith('tab-'))objElement.dataset.panel=strId.slice(4);mapElements.set(strId,objElement);}return mapElements.get(strId);}
- const objContext={document:{getElementById:getElement,createElement,querySelectorAll(){return [];}},location:{search:'',pathname:'/admin'},URLSearchParams,setInterval(){},fetch:async(strPath,objOptions={})=>{
+ const objContext={document:{getElementById:getElement,createElement,querySelectorAll(){return [];}},location:{search:'',pathname:'/admin'},URLSearchParams,setInterval(){},setTimeout(fnHandler,nDelay){mapTimers.set(++nTimer,{fnHandler,nDelay});return nTimer;},clearTimeout(nId){mapTimers.delete(nId);},fetch:async(strPath,objOptions={})=>{
   if(strPath==='/api/menu')return {ok:true,json:async()=>[]};
-  if(objOptions.method){arrRequests.push({strPath,...objOptions});return {ok:true,json:async()=>({})};}
+  if(objOptions.method){arrRequests.push({strPath,...objOptions});return {ok:nResponseStatus===200,status:nResponseStatus,json:async()=>nResponseStatus===200?{}:{error:'Server unavailable'}};}
   return {ok:true,json:async()=>strPath.includes('active')?[objOrder]:[]};
  }};
  vm.createContext(objContext);vm.runInContext(strScript.replace(/^ *import .*;\r?\n/gm,''),objContext);
  await new Promise(fnResolve=>setImmediate(fnResolve));
  const objCard=getElement('current-orders').children[0];
  const objForm=objCard.children.find(objChild=>objChild.handlers.submit);
- objForm.children[1].value='2026-10-20T14:30';
+ const objInput=objForm.children[1],objAlert=objForm.children[3];
+ assert.equal(objForm.noValidate,true);assert.equal(objAlert.hidden,true);
+ assert.equal(objInput.attrs['aria-describedby'],objAlert.id);assert.equal(objAlert.attrs.role,'alert');
+ const strError='Invalid time: You cannot select a pickup time in the past.';
+ for(const strValue of ['', 'invalid', '2020-01-01T00:00']){
+  objInput.value=strValue;await objForm.handlers.submit({preventDefault(){}});
+  assert.equal(arrRequests.length,0);assert.equal(objAlert.textContent,strError);assert.equal(objAlert.hidden,false);
+  assert.equal(objInput.attrs['aria-invalid'],'true');assert.equal(objInput.bFocused,true);
+  assert.equal(mapTimers.size,1);const objTimer=[...mapTimers.values()][0];assert.equal(objTimer.nDelay,3500);objTimer.fnHandler();
+  assert.equal(objAlert.hidden,true);assert.equal(objAlert.textContent,'');
+ }
+ objInput.handlers.input();assert.equal(mapTimers.size,0);assert.equal(objInput.attrs['aria-invalid'],undefined);
+ objForm.children[1].value='2099-10-20T14:30';
  await objForm.handlers.submit({preventDefault(){}});
  assert.equal(arrRequests[0].strPath,'/api/employee/orders/7/estimate');
- assert.equal(JSON.parse(arrRequests[0].body).estimatedPickupTime,new Date('2026-10-20T14:30').toISOString());
+ assert.equal(JSON.parse(arrRequests[0].body).estimatedPickupTime,new Date('2099-10-20T14:30').toISOString());
  const objActions=objCard.children.at(-1);assert.equal(objActions.children.length,1);
  objActions.children[0].handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
  assert.equal(arrRequests[1].strPath,'/api/employee/orders/7/status');
@@ -67,6 +79,17 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
  const objReadyCard=vm.runInContext("renderOrder(objReadyOrder,'current')",objContext);
  objReadyCard.children.at(-1).children[0].handlers.click();await new Promise(fnResolve=>setImmediate(fnResolve));
  assert.equal(arrRequests.at(-1).strPath,'/api/employee/orders/7/complete');assert.equal(arrRequests.at(-1).method,'POST');
+ nResponseStatus=400;objInput.value='2099-10-20T14:30';await objForm.handlers.submit({preventDefault(){}});
+ assert.equal(objAlert.hidden,false);assert.equal(objAlert.textContent,strError);assert.equal(objForm.children[2].disabled,false);
+ const fnPreviousTimer=[...mapTimers.values()][0].fnHandler;
+ await objForm.handlers.submit({preventDefault(){}});assert.equal(mapTimers.size,1);assert.notEqual([...mapTimers.values()][0].fnHandler,fnPreviousTimer);
+ objInput.handlers.input();assert.equal(objAlert.hidden,true);assert.equal(mapTimers.size,0);
+ nResponseStatus=500;await objForm.handlers.submit({preventDefault(){}});
+ assert.equal(objAlert.hidden,true);assert.equal(getElement('message').textContent,'Server unavailable');
+ nResponseStatus=200;await objForm.handlers.submit({preventDefault(){}});
+ assert.equal(objAlert.hidden,true);assert.equal(mapTimers.size,0);assert.equal(objInput.attrs['aria-invalid'],undefined);
+ assert.equal(getElement('message').textContent,'Pickup estimate saved for LP-7.');
+
 });
 
 test('admin pages share a centered standard header and keep only back and home links',()=>{
@@ -76,4 +99,8 @@ test('admin pages share a centered standard header and keep only back and home l
  assert.ok(strHtml.includes('aria-label="Page navigation"><a id="go-back"'));
  assert.ok(strHtml.includes("$('staff-title').textContent=bAnalyticsPage?'Luigi’s Analytics':bMenuPage?'Luigi’s Menu':'Luigi’s Order Desk'"));
  assert.ok(!strHtml.includes('ordering-forecast'));assert.ok(!strScript.includes("['forecast','ordering-forecast']"));
+});
+
+test('pickup invalid styling is scoped to the estimate and includes server rejection',()=>{
+ assert.match(strHtml,/\.pickup-estimate:invalid,\.pickup-estimate:out-of-range,\.pickup-estimate\[aria-invalid="true"\]\{background-color:#e9ecef;color:#595f64;border-color:#6c757d\}/);
 });

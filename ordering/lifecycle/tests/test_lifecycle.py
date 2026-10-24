@@ -238,7 +238,7 @@ def test_staff_auth_estimate_sequential_stale_and_archive(objHarness):
     assert len(objClient.get('/api/employee/orders/active').json()) == 1
     assert objClient.post(strBase + '/complete', json={'expectedStatus':'order_ready'}).status_code == 409
     assert objClient.patch(strBase + '/status', json={'status':'order_ready','expectedStatus':'order_received'}).status_code == 409
-    assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':'2020-01-01T00:00:00Z'}).status_code == 422
+    assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':'2020-01-01T00:00:00Z'}).status_code == 400
     strEstimate = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 200
     assert objClient.patch(strBase + '/estimate', json={'estimatedPickupTime':strEstimate}).status_code == 200
@@ -324,3 +324,28 @@ def test_checkout_retries_only_deadlock_victims(monkeypatch):
     monkeypatch.setattr(objModule, 'create_order_once', unavailable)
     with pytest.raises(pymysql.OperationalError):
         objModule.create_order(objModule.Checkout.model_validate(payload()), BackgroundTasks())
+
+
+@pytest.mark.parametrize('strEstimate', ['2020-01-01T00:00:00Z', '2020-01-01T00:00:00-06:00', 'invalid', '2099-01-01T00:00:00', None])
+def test_pickup_estimate_rejected_without_database_changes(objHarness, strEstimate):
+    objClient, objConnection, _ = objHarness
+    objReceipt = objClient.post('/api/orders', json=payload()).json()
+    objClient.auth = ('staff', 'test-password')
+    objResponse = objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/estimate", json={'estimatedPickupTime': strEstimate})
+    assert objResponse.status_code == 400
+    assert 'error' in objResponse.json()
+    assert objConnection.execute('SELECT estimated_pickup_time FROM orders').fetchone()[0] is None
+
+
+def test_pickup_estimate_normalizes_offset_and_reaches_tracker(objHarness):
+    objClient, objConnection, _ = objHarness
+    objReceipt = objClient.post('/api/orders', json=payload()).json()
+    objClient.auth = ('staff', 'test-password')
+    dtEstimate = (datetime.now(timezone.utc) + timedelta(hours=2)).replace(microsecond=0)
+    strEstimate = dtEstimate.astimezone(timezone(timedelta(hours=-6))).isoformat()
+    objResponse = objClient.patch(f"/api/employee/orders/{objReceipt['orderId']}/estimate", json={'estimatedPickupTime': strEstimate})
+    assert objResponse.status_code == 200
+    assert objResponse.json()['estimatedPickupTime'] == dtEstimate.replace(tzinfo=None).isoformat() + 'Z'
+    objTrack = objClient.get(objReceipt['trackerUrl'].replace('/track?token=', '/api/orders/') + '/track')
+    assert objTrack.status_code == 200
+    assert objTrack.json()['estimatedPickupTime'] == objResponse.json()['estimatedPickupTime']
