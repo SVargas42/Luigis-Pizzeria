@@ -1,7 +1,7 @@
 const $=strId=>document.getElementById(strId);
 const objQuery=new URLSearchParams(location.search),objFragment=new URLSearchParams(location.hash.slice(1));
 const strToken=objFragment.get('token')||'';
-const strMode=objFragment.get('action')||objQuery.get('mode')||'login';
+let strMode=objFragment.get('action')||objQuery.get('mode')||'login';
 if(location.hash)history.replaceState(null,'',location.pathname+location.search);
 let strSelectedId=null;
 let objAuthenticatedUser=null;
@@ -21,6 +21,9 @@ async function init(){
  try{
   const objSession=await api('/api/session');
   objAuthenticatedUser=objSession.authenticated?objSession.user:null;
+  // A valid server session selects the profile instead of guest authentication forms.
+  if(objSession.authenticated&&['login','register','forgot','resend'].includes(strMode))strMode='profile';
+  $('account-actions').hidden=Boolean(objSession.authenticated);
   if(objSession.authenticated){$('signed-in').hidden=false;$('identity').textContent=`${objSession.user.firstName} ${objSession.user.lastName} · ${objSession.user.email}`;for(const strId of ['admin-link','analytics-link','accounts-link'])$(strId).hidden=objSession.user.role!=='admin';if(objSession.user.role==='worker'){$('admin-link').hidden=false;$('admin-link').href='/staff';$('admin-link').textContent='Kitchen order queue';}}
   if(location.pathname==='/admin/accounts'){if(objSession.user?.role!=='admin')throw Error('Sign in with an administrator account.');$('signed-in').hidden=true;$('title').hidden=true;$('message').hidden=true;$('account-home-link').hidden=true;$('account-actions').hidden=true;$('management').hidden=false;$('management-header').hidden=false;$('management-title').textContent='Account Management';$('management-subtitle').textContent='Manage customer and staff accounts';setupBackLink('/admin/management');$('management-title').focus();await loadAccounts();return;}
   if(strMode==='verify'){$('title').textContent='Verify email';announce((await api('/api/auth/verify',{token:strToken})).message);return;}
@@ -31,7 +34,7 @@ async function init(){
   const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
   if(strMode==='profile'){$('account-home-link').hidden=true;$('title').hidden=true;$('management-header').hidden=false;$('management-title').textContent='Your profile';$('management-subtitle').textContent='Manage your account details';setupBackLink('/',true);$('management-title').focus();}
   $('profile-fields').hidden=!bProfile;$('phone-field').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
-  $('email-field').hidden=!(bEmail||strMode==='profile');$('email').required=bEmail;$('email').disabled=strMode==='profile';$('email').classList.toggle('readonly-input',strMode==='profile');$('email-locked-help').hidden=strMode!=='profile';if(strMode==='profile'){$('email').value=objSession.user.email;$('email').setAttribute('aria-describedby','email-locked-help');}else $('email').removeAttribute('aria-describedby');$('account-actions').hidden=strMode==='profile';$('profile-actions').hidden=strMode!=='profile';$('signed-in').hidden=strMode==='profile'||!objSession.authenticated;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
+  $('email-field').hidden=!(bEmail||strMode==='profile');$('email').required=bEmail;$('email').disabled=strMode==='profile';$('email').classList.toggle('readonly-input',strMode==='profile');$('email-locked-help').hidden=strMode!=='profile';if(strMode==='profile'){$('email').value=objSession.user.email;$('email').setAttribute('aria-describedby','email-locked-help');}else $('email').removeAttribute('aria-describedby');$('account-actions').hidden=Boolean(objSession.authenticated);$('profile-actions').hidden=strMode!=='profile';$('signed-in').hidden=strMode==='profile'||!objSession.authenticated;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
   const bConfirmPassword = ['register', 'reset'].includes(strMode);
   $('confirm-password-field').hidden = !bConfirmPassword;
   $('confirmPassword').required = bConfirmPassword;
@@ -97,7 +100,7 @@ $('account-form').onsubmit=async objEvent=>{
 $('reset-password').onclick=async()=>{if(!objAuthenticatedUser?.email)return;const objButton=$('reset-password');objButton.disabled=true;try{const objResult=await api('/api/auth/forgot',{email:objAuthenticatedUser.email});announce(objResult.message||'If a matching account exists, a password reset link will be sent.');}catch(objError){announce(objError.message);}finally{objButton.disabled=false;}};
 $('phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 $('invite-phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
-$('logout').onclick=async()=>{try{await api('/api/auth/logout',{});location.assign('/');}catch(objError){announce(objError.message);}};
+for(const strId of ['logout','signed-in-logout'])$(strId).onclick=async()=>{try{await api('/api/auth/logout',{});location.assign('/');}catch(objError){announce(objError.message);}};
 $('refresh').onclick=loadAccounts;
 $('invite-form').onsubmit=async objEvent=>{objEvent.preventDefault();const objButton=$('invite-form').querySelector('button');objButton.disabled=true;try{const objResult=await api('/api/admin/accounts/invite',{firstName:$('invite-first').value,lastName:$('invite-last').value,email:$('invite-email').value,phone:$('invite-phone').value,role:$('invite-role').value,currentPassword:$('invite-password').value});$('invite-form').reset();announce(objResult.message);await loadAccounts();}catch(objError){announce(objError.message);}finally{$('invite-password').value='';objButton.disabled=false;}};
 $('update-form').onsubmit=async objEvent=>{objEvent.preventDefault();const objButton=$('update-form').querySelector('button');objButton.disabled=true;try{const objResult=await api('/api/admin/accounts/update',{id:strSelectedId,role:$('update-role').value,disabled:$('update-disabled').value==='true',currentPassword:$('update-password').value});announce(objResult.message);$('update-form').hidden=true;await loadAccounts();}catch(objError){announce(objError.message);}finally{$('update-password').value='';objButton.disabled=false;}};

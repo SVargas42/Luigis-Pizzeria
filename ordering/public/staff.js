@@ -85,4 +85,5 @@ async function initializeStaffQueue(){
  try{const objSession=await staffApi('/api/session');if(!objSession.authenticated||!['worker','admin'].includes(objSession.user?.role))throw Error('Sign in with your worker or administrator account to use the kitchen queue.');bStaffReady=true;getStaffElement('staff-identity').textContent=`Signed in: ${objSession.user.firstName} ${objSession.user.lastName}`;getStaffElement('staff-admin-link').hidden=objSession.user.role!=='admin';getStaffElement('staff-refresh').disabled=false;getStaffElement('staff-pause').disabled=false;await refreshStaffQueue();}
  catch(objError){staffMessage(objError.message);}
 }
+getStaffElement('staff-sign-out').addEventListener('click',async()=>{const objButton=getStaffElement('staff-sign-out');objButton.disabled=true;try{await staffApi('/api/auth/logout','POST',{});location.assign('/account?mode=login');}catch(objError){staffMessage(objError.message);objButton.disabled=false;}});
 initializeStaffQueue();
