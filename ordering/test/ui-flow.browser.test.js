@@ -33,7 +33,7 @@ test('pizza quantities update totals, preserve keyboard input and reach checkout
  assert.equal(await objPage.locator('#pizzas-container .pizza-builder').count(),1);
  assert.equal(await objPage.locator('#add-pizza').isDisabled(),true);
  await objQuantity.fill('29');assert.equal(await objPage.locator('#add-pizza').isEnabled(),true);
- await objPage.getByRole('button',{name:'Add to Order',exact:true}).click();
+ await objPage.getByRole('button',{name:'＋ Add another pizza',exact:true}).click();
  await objPage.locator('.pizza-builder').nth(1).getByRole('radio',{name:'Large',exact:true}).check();
  await objPage.locator('.pizza-builder').nth(0).getByRole('button',{name:/Pizza 1/}).click();
  objQuantity=objPage.getByRole('spinbutton',{name:'Quantity of pizza 1',exact:true});

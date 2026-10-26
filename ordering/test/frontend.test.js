@@ -227,6 +227,6 @@ test('pizza quantity validation rejects invalid quantities and a combined count 
  assert.equal(vm.runInContext("state.pizzas=[{id:1,size:'Small',toppings:[],quantity:25},{id:2,size:'Small',toppings:[],quantity:6}];validatePizzaQuantities()",objHarness.objContext),false);
  assert.equal(vm.runInContext('state.pizzas[1].quantity=5;validatePizzaQuantities()',objHarness.objContext),true);
  assert.equal(vm.runInContext('checkoutPizzas().length',objHarness.objContext),30);
- assert.match(strHtml,/>Add to Order<\/button>/);
+ assert.match(strHtml,/>＋ Add another pizza<\/button>/);
  assert.ok(!strHtml.includes('Continue as Guest'));
 });
