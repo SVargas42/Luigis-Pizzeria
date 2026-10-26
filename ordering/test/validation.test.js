@@ -4,6 +4,12 @@ import {normalizeEditableItems,validateOrder} from '../validation.js';
 const menu=new Map([['pizza:Small',1000],['pizza:Large',1600],['topping:Cheese',150],['side:Breadsticks',500],['drink:Medium',275],['drink_name:Coke',0]]);
 const order=()=>({requestKey:'12345678-1234-4123-8123-123456789abc',customer:{firstName:' Ada ',lastName:'Lovelace',email:'ADA@example.com',phone:''},pizzas:[{size:'Large',toppings:['Cheese']}],sides:[{name:'Breadsticks',quantity:2}],drinks:[{name:'Coke',size:'Medium',quantity:3}],total:1});
 
+test('online orders accept thirty pizzas with server prices and reject thirty-one',()=>{
+ const objOrder=order();objOrder.pizzas=Array.from({length:30},()=>({size:'Large',toppings:['Cheese']}));objOrder.sides=[];objOrder.drinks=[];
+ const objResult=validateOrder(objOrder,menu);assert.equal(objResult.items.length,30);assert.equal(objResult.total,52500);
+ objOrder.pizzas.push({size:'Small',toppings:[]});assert.throws(()=>validateOrder(objOrder,menu));
+});
+
 test('multiple database-menu side types are priced independently, including newly added sides',()=>{
  const mapMenu=new Map([...menu,['side:Pizza Bites',600],['side:Pizza Stick',350]]);
  const objOrder=order();objOrder.sides=[{name:'Breadsticks',quantity:2},{name:'Pizza Bites',quantity:1},{name:'Pizza Stick',quantity:1}];

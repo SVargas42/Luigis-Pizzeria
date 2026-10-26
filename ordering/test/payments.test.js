@@ -6,6 +6,16 @@ import {createPaymentService,makeQuote,canonicalCheckout,verifyPaidSession} from
 import {paymentStore} from './payment-store.js';
 const objStripeSdk=new Stripe('sk_test_unit_only');
 
+test('Stripe checkout accepts thirty pizzas and rejects thirty-one before creating a session',async()=>{
+ const objHarness=harness();objHarness.objInput.pizzas=Array.from({length:30},()=>({size:'Small',toppings:['Cheese']}));objHarness.objInput.sides=[];objHarness.objInput.drinks=[];
+ const objCanonical=canonicalCheckout(objHarness.objInput,null),objQuote=makeQuote(objCanonical,objHarness.objStore.mapMenu,825);
+ assert.equal(objQuote.subtotalCents,34500);assert.equal(objQuote.items.length,30);
+ assert.equal((await objHarness.objService.createCheckout(objHarness.objInput,null)).state,'open');
+ const objTooLarge=harness();objTooLarge.objInput.pizzas=Array.from({length:31},()=>({size:'Small',toppings:[]}));
+ await assert.rejects(objTooLarge.objService.createCheckout(objTooLarge.objInput,null),objError=>objError.status===400);
+ assert.equal(objTooLarge.objStore.state.payments.length,0);
+});
+
 test('guest Stripe checkout accepts an omitted phone but an account profile still requires it',async()=>{
  const objHarness=harness();objHarness.objInput.customer.phone='';
  const objResult=await objHarness.objService.createCheckout(objHarness.objInput,null);

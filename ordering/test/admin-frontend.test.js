@@ -46,6 +46,10 @@ test('staff lifecycle controls submit sequential status, UTC estimate and archiv
  const objCard=getElement('current-orders').children[0];
  const objForm=objCard.children.find(objChild=>objChild.handlers.submit);
  const objInput=objForm.children[1],objAlert=objForm.children[3];
+ const nSuggested=new Date(objInput.value).getTime();
+ assert.ok(nSuggested>=Date.now()+14*60000&&nSuggested<=Date.now()+16*60000);
+ assert.equal(arrRequests.length,0);
+
  assert.equal(objForm.noValidate,true);assert.equal(objAlert.hidden,true);
  assert.equal(objInput.attrs['aria-describedby'],objAlert.id);assert.equal(objAlert.attrs.role,'alert');
  const strError='Invalid time: You cannot select a pickup time in the past.';

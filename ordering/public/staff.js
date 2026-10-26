@@ -28,7 +28,7 @@ function renderStaffOrders(arrOrders){
   const objActions=staffText('div','','actions'),objAdvance=staffText('button',nStage===4?'Mark picked up':`Next: ${objStageLabels[arrStaffStages[nStage+1]]}`,'btn primary');objAdvance.type='button';
   objAdvance.addEventListener('click',()=>changeStaffOrder(objAdvance,`/api/employee/orders/${objOrder.id}/${nStage===4?'complete':'status'}`,nStage===4?'POST':'PATCH',nStage===4?{expectedStatus:'order_ready'}:{expectedStatus:objOrder.tracking_status,status:arrStaffStages[nStage+1]}));objActions.append(objAdvance);objCard.append(objActions);
   const objEstimate=document.createElement('form');objEstimate.className='estimate-form';
-  const objLabel=staffText('label','Estimated pickup time (your local time)'),objInput=document.createElement('input');objInput.type='datetime-local';objInput.id=`estimate-${objOrder.id}`;objInput.required=true;objInput.value=objOrder.estimated_pickup_time?localEstimate(objOrder.estimated_pickup_time):'';objLabel.htmlFor=objInput.id;
+  const objLabel=staffText('label','Estimated pickup time (your local time)'),objInput=document.createElement('input');objInput.type='datetime-local';objInput.id=`estimate-${objOrder.id}`;objInput.required=true;const dtSavedEstimate=new Date(objOrder.estimated_pickup_time||'');const dtSuggestedEstimate=new Date(Math.ceil((Date.now()+15*60000)/60000)*60000);objInput.value=localEstimate((Number.isFinite(dtSavedEstimate.getTime())&&dtSavedEstimate.getTime()>Date.now()?dtSavedEstimate:dtSuggestedEstimate).toISOString());objLabel.htmlFor=objInput.id;
   // Handle invalid submissions ourselves so the warning always appears.
   objEstimate.noValidate=true;
   const updateEstimateMinimum=()=>{

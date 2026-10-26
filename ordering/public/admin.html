@@ -217,7 +217,9 @@
           };
           updateEstimateMinimum();
           for(const strEvent of ['focus','click','keydown'])objEstimate.addEventListener(strEvent,updateEstimateMinimum);
-          if(objOrder.estimated_pickup_time){const dtPickup=new Date(objOrder.estimated_pickup_time);objEstimate.value=new Date(dtPickup.getTime()-dtPickup.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+          const dtSavedEstimate=new Date(objOrder.estimated_pickup_time||'');
+          const dtPickup=Number.isFinite(dtSavedEstimate.getTime())&&dtSavedEstimate.getTime()>Date.now()?dtSavedEstimate:new Date(Math.ceil((Date.now()+15*60000)/60000)*60000);
+          objEstimate.value=new Date(dtPickup.getTime()-dtPickup.getTimezoneOffset()*60000).toISOString().slice(0,16);
           const objSave=textElement('button','Save pickup estimate','btn btn-primary');objSave.type='submit';
           // Let submit reach our handler even when native constraints fail.
           objEstimateForm.noValidate=true;

@@ -87,3 +87,21 @@ test('employee invalid styles and alert are scoped without changing keyboard foc
  assert.match(strHtml,/\.estimate-form \.alert-danger\{/);
  assert.ok(strHtml.includes(':focus-visible{outline:3px solid #245d84;outline-offset:4px}'));
 });
+
+
+test('worker pickup defaults use current time plus fifteen minutes and preserve only future saved estimates',async()=>{
+ const objHarness=await fixture();
+ const localValue=nTime=>{const dtValue=new Date(nTime);return new Date(nTime-dtValue.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+ const suggested=()=>localValue(Math.ceil((objHarness.nNow+15*60000)/60000)*60000);
+ assert.equal(estimateForm(objHarness).children[1].value,suggested());
+ assert.equal(objHarness.arrRequests.filter(objRequest=>objRequest.strPath.endsWith('/estimate')).length,0);
+ objHarness.advance(3*60*60000);
+ await vm.runInContext('refreshStaffQueue()',objHarness.objContext);
+ assert.equal(estimateForm(objHarness).children[1].value,suggested());
+ objHarness.objOrder.estimated_pickup_time=new Date(objHarness.nNow+45*60000).toISOString();
+ await vm.runInContext('refreshStaffQueue()',objHarness.objContext);
+ assert.equal(estimateForm(objHarness).children[1].value,localValue(objHarness.nNow+45*60000));
+ objHarness.objOrder.estimated_pickup_time=new Date(objHarness.nNow-60000).toISOString();
+ await vm.runInContext('refreshStaffQueue()',objHarness.objContext);
+ assert.equal(estimateForm(objHarness).children[1].value,suggested());
+});

@@ -72,7 +72,7 @@ class Drink(BaseModel):
 class Checkout(BaseModel):
     requestKey: UUID
     customer: Customer
-    pizzas: list[Pizza] = Field(min_length=1, max_length=20)
+    pizzas: list[Pizza] = Field(min_length=1, max_length=30)
     sides: list[Side] = Field(max_length=20)
     drinks: list[Drink] = Field(max_length=20)
     paymentMethod: Literal['online', 'in_store']

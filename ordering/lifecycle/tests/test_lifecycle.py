@@ -349,3 +349,21 @@ def test_pickup_estimate_normalizes_offset_and_reaches_tracker(objHarness):
     objTrack = objClient.get(objReceipt['trackerUrl'].replace('/track?token=', '/api/orders/') + '/track')
     assert objTrack.status_code == 200
     assert objTrack.json()['estimatedPickupTime'] == objResponse.json()['estimatedPickupTime']
+
+@pytest.mark.parametrize('nQuantity,nStatus', [(1,201),(20,201),(30,201),(31,422)])
+def test_online_pizza_quantity_limit(objHarness, nQuantity, nStatus):
+    objClient,objConnection,_=objHarness
+    objPayload=payload()
+    objPayload['pizzas']=[{'size':'Small','toppings':['Cheese']} for _ in range(nQuantity)]
+    objPayload['sides']=[]
+    objPayload['drinks']=[]
+    objResponse=objClient.post('/api/orders',json=objPayload)
+    assert objResponse.status_code==nStatus
+    if nStatus==201:
+        objReceipt=objResponse.json()
+        assert objReceipt['subtotalCents']==nQuantity*1150
+        assert objConnection.execute('SELECT SUM(quantity) FROM order_items').fetchone()[0]==nQuantity
+        assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0]==1
+    else:
+        assert objConnection.execute('SELECT COUNT(*) FROM orders').fetchone()[0]==0
+        assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0]==0

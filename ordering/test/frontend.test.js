@@ -118,17 +118,17 @@ test('signed-in customer skips the guest details step and receives the Orders en
  assert.equal(objHarness.mapElements.get('email').value,'ada@example.com');
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),true);
  assert.equal(objHarness.mapElements.get('orders-button').classList.contains('hidden'),false);
- assert.equal(objHarness.mapElements.get('start-order').textContent,'Place an Order →');
+ assert.equal(objHarness.mapElements.get('start-order').textContent,'Start your Order →');
 });
 test('guest checkout keeps its details step and account requests do not authenticate a visitor',()=>{
  const objHarness=createHarness();
- objHarness.mapElements.get('start-order').textContent='Continue as Guest →';
+ objHarness.mapElements.get('start-order').textContent='Start your Order →';
  objHarness.mapElements.get('sign-in').handlers.click();
  assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);
  assert.equal(objHarness.objContext.location.href,'/account?mode=login');
  objHarness.mapElements.get('start-order').handlers.click();
  assert.equal(vm.runInContext('state.step',objHarness.objContext),1);
- assert.equal(objHarness.mapElements.get('start-order').textContent,'Continue as Guest →');
+ assert.equal(objHarness.mapElements.get('start-order').textContent,'Start your Order →');
  assert.equal(objHarness.mapElements.get('step-1').classList.contains('hidden'),false);
 });
 test('account access uses the real sign-in page and has no role selector',()=>{const objHarness=createHarness();objHarness.mapElements.get('create-account').handlers.click();assert.equal(objHarness.objContext.location.href,'/account?mode=register');assert.doesNotMatch(strHtml,/id="demo-role"/);assert.equal(vm.runInContext('objAuthState.user',objHarness.objContext),null);});
@@ -201,4 +201,32 @@ test('verified return displays the paid receipt, tracker and confirmation withou
   return fnOriginal(strPath,objOptions);
  };
  vm.runInContext(strStripeCode,objHarness.objContext);await new Promise(fnResolve=>setImmediate(fnResolve));assert.equal(vm.runInContext('state.step',objHarness.objContext),4);assert.equal(objHarness.mapElements.get('order-number').textContent,'LP-99');assert.equal(objHarness.mapElements.get('receipt-details').textContent,'Paid by card · paid');assert.equal(objHarness.mapElements.get('receipt-tracker').href,'/track?token=verified');assert.equal(objHarness.objContext.sessionStorage.getItem('luigiStripeCheckout'),null);assert.equal(objHarness.arrRequests.length,0);
+});
+
+
+test('pizza quantities price and submit thirty identical pizzas through the existing checkout contract',async()=>{
+ const objHarness=createHarness();await new Promise(fnResolve=>setImmediate(fnResolve));
+ vm.runInContext("state.pizzas[0].size='Small';state.pizzas[0].toppings=['Pepperoni'];state.pizzas[0].quantity=30;renderAll();",objHarness.objContext);
+ assert.equal(vm.runInContext('total()',objHarness.objContext),360);
+ assert.equal(objHarness.mapElements.get('add-pizza').disabled,true);
+ assert.match(objHarness.mapElements.get('menu-summary-lines').innerHTML,/× 30/);
+ assert.match(objHarness.mapElements.get('pizzas-container').innerHTML,/aria-label="Quantity of pizza 1"/);
+ let objCheckout;objHarness.objContext.beginStripeCheckout=async objPayload=>{objCheckout=JSON.parse(JSON.stringify(objPayload));};
+ await objHarness.mapElements.get('payment-form').handlers.submit({preventDefault(){}});
+ assert.equal(objCheckout.pizzas.length,30);
+ assert.ok(objCheckout.pizzas.every(objPizza=>objPizza.size==='Small'&&objPizza.toppings.join()==='Pepperoni'));
+ assert.notEqual(objCheckout.pizzas[0].toppings,objCheckout.pizzas[1].toppings);
+});
+
+test('pizza quantity validation rejects invalid quantities and a combined count over thirty',async()=>{
+ const objHarness=createHarness();await new Promise(fnResolve=>setImmediate(fnResolve));
+ for(const nQuantity of [0,-1,1.5,31,NaN]){
+  objHarness.objContext.nTestQuantity=nQuantity;
+  assert.equal(vm.runInContext("state.pizzas[0].quantity=nTestQuantity;validatePizzaQuantities()",objHarness.objContext),false);
+ }
+ assert.equal(vm.runInContext("state.pizzas=[{id:1,size:'Small',toppings:[],quantity:25},{id:2,size:'Small',toppings:[],quantity:6}];validatePizzaQuantities()",objHarness.objContext),false);
+ assert.equal(vm.runInContext('state.pizzas[1].quantity=5;validatePizzaQuantities()',objHarness.objContext),true);
+ assert.equal(vm.runInContext('checkoutPizzas().length',objHarness.objContext),30);
+ assert.match(strHtml,/>Add to Order<\/button>/);
+ assert.ok(!strHtml.includes('Continue as Guest'));
 });

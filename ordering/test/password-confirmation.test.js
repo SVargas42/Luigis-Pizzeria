@@ -13,7 +13,7 @@ async function createFixture(strMode='register'){
  const mapElements=new Map(),arrRequests=[];
  let objFocused=null,nStatus=201,objBody={message:'Account created.'};
  function getElement(strId){
-  if(!mapElements.has(strId))mapElements.set(strId,{value:'',hidden:true,required:false,disabled:false,textContent:'',className:'',classList:{add(){}},focus(){objFocused=this;},reportValidity(){return true;},addEventListener(){}});
+  if(!mapElements.has(strId))mapElements.set(strId,{value:'',hidden:true,required:false,disabled:false,textContent:'',className:'',classList:{add(){},remove(){},toggle(){}},setAttribute(){},removeAttribute(){},focus(){objFocused=this;},reportValidity(){return true;},addEventListener(){}});
   return mapElements.get(strId);
  }
  const objContext={document:{getElementById:getElement},history:{replaceState(){}},location:{search:'?mode='+strMode,hash:strMode==='reset'?'#action=reset&token=test-reset-token':'',pathname:'/account'},URLSearchParams,fetch:async(strPath,objOptions)=>{

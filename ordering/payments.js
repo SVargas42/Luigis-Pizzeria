@@ -11,7 +11,7 @@ export function canonicalCheckout(objPayload,objIdentity){
  if(strPhoneDigits.length===10)objCustomer.phone=`(${strPhoneDigits.slice(0,3)}) ${strPhoneDigits.slice(3,6)}-${strPhoneDigits.slice(6)}`;
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(objPayload?.requestKey||''))fail(400,'Invalid checkout key.');
  if(!hasToken(objPayload.checkoutToken))fail(400,'Invalid checkout access token.');
- for(const strKey of ['pizzas','sides','drinks'])if(!Array.isArray(objPayload[strKey])||objPayload[strKey].length>20)fail(400,'Invalid order selections.');
+ for(const strKey of ['pizzas','sides','drinks'])if(!Array.isArray(objPayload[strKey])||objPayload[strKey].length>(strKey==='pizzas'?30:20))fail(400,'Invalid order selections.');
  const arrSides=objPayload.sides.map(objSide=>({name:objSide?.name,quantity:objSide?.quantity,...(objSide?.size==null?{}:{size:objSide.size})}));
  return {requestKey:objPayload.requestKey,customer:objCustomer,pizzas:objPayload.pizzas.map(objPizza=>({size:objPizza?.size,toppings:Array.isArray(objPizza?.toppings)?[...objPizza.toppings].sort():null})),sides:arrSides,drinks:objPayload.drinks.map(objDrink=>({name:objDrink?.name,size:objDrink?.size,quantity:objDrink?.quantity}))};
 }

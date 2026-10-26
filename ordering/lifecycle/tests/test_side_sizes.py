@@ -22,7 +22,7 @@ def test_side_size_price_snapshot_and_retry(objHarness, strSize, nUnit):
     objConnection.execute('UPDATE menu_variations SET price_cents=999,is_active=0')
     objConnection.commit()
     assert objClient.post('/api/orders', json=objPayload).json() == objReceipt
-    assert len(arrMail) == 1
+    assert objConnection.execute('SELECT COUNT(*) FROM account_mail').fetchone()[0] == 1
 
 
 @pytest.mark.parametrize('strSize', ['Regular', 'Tiny', 'Extra Large', '', 'x'*21])

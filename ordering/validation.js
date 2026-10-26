@@ -4,7 +4,7 @@ export function validateOrder(objBody, mapMenu, arrSideVariations=[]) {
  const objCustomer=objBody?.customer;
  if(!objCustomer || !hasText(objCustomer.firstName,80) || !hasText(objCustomer.lastName,80) || !hasText(objCustomer.email,254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(objCustomer.email.trim()) || typeof objCustomer.phone!=='string' || objCustomer.phone.length>14 || !/^$|^\([0-9]{3}\) [0-9]{3}-[0-9]{4}$/.test(objCustomer.phone)) failValidation();
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(objBody.requestKey || '')) failValidation();
- if(!Array.isArray(objBody.pizzas) || !objBody.pizzas.length || objBody.pizzas.length>20 || !Array.isArray(objBody.sides) || objBody.sides.length>20 || !Array.isArray(objBody.drinks) || objBody.drinks.length>20) failValidation();
+ if(!Array.isArray(objBody.pizzas) || !objBody.pizzas.length || objBody.pizzas.length>30 || !Array.isArray(objBody.sides) || objBody.sides.length>20 || !Array.isArray(objBody.drinks) || objBody.drinks.length>20) failValidation();
  const getPrice = (strKind,strName) => {
   if(typeof strName!=='string') failValidation();
   const nPrice=mapMenu.get(`${strKind}:${strName}`);
