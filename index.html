@@ -69,6 +69,23 @@
   html{scroll-padding-top:100px}
   .pizza-builder input{scroll-margin-top:100px}
 }
+</style><style id="addon-tap-targets">
+/* Extend each native side label over its row; keep quantity controls above it. */
+#sides-list .extra-row{position:relative;min-height:56px;cursor:pointer}
+#sides-list .extra-choice{flex:1;align-self:stretch;margin:0}
+#sides-list .extra-choice::after{content:"";position:absolute;inset:0;border-radius:10px}
+#sides-list .extra-choice .form-check-input{width:26px;height:26px;flex-shrink:0}
+#sides-list .extra-quantity{position:relative;z-index:1}
+#sides-list .extra-row:focus-within{outline:3px solid #245d84;outline-offset:3px}
+#sides-list .extra-row:has(.side-check:checked){background:#edf2e9;border-color:#315b3b}
+.drink-config .form-select{min-height:44px}
+@media(max-width:520px){
+#sides-list .extra-row{flex-wrap:wrap;gap:10px}
+#sides-list .extra-choice{flex-basis:100%;min-width:0;flex-wrap:wrap}
+#sides-list .extra-quantity{flex-basis:100%}
+.drink-config{grid-template-columns:minmax(0,1fr)}
+.drink-config .extra-field,.drink-config .form-select{min-width:0;width:100%}
+}
 </style></head>
 <body>
   <header class="topbar">
