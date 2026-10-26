@@ -411,7 +411,7 @@ def track_order(strToken: str):
 @app.get('/api/employee/orders/active', dependencies=[Depends(require_employee)])
 def active_orders():
     with database() as objCursor:
-        objCursor.execute("SELECT id,customer_name,customer_email,customer_phone,status,tracking_status,payment_method,payment_status,total_cents,estimated_pickup_time,created_at,updated_at FROM orders WHERE status NOT IN ('completed','cancelled') ORDER BY id DESC LIMIT 500")
+        objCursor.execute("SELECT id,customer_name,customer_email,customer_phone,status,tracking_status,payment_method,payment_status,total_cents,estimated_pickup_time,created_at,updated_at FROM orders WHERE status NOT IN ('completed','cancelled') ORDER BY created_at ASC, id ASC LIMIT 500")
         arrOrders = objCursor.fetchall()
         for objOrder in arrOrders:
             objCursor.execute('SELECT kind,description,quantity,unit_price_cents FROM order_items WHERE order_id=%s ORDER BY id', (objOrder['id'],))
