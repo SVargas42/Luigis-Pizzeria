@@ -6,6 +6,12 @@ if(location.hash)history.replaceState(null,'',location.pathname+location.search)
 let strSelectedId=null;
 let objAuthenticatedUser=null;
 function announce(strText){$('message').hidden=false;$('message').textContent=strText;}
+function showForgotAlert(strText,bSuccess){
+  const objAlert=$('forgot-alert');
+  objAlert.textContent=strText;
+  objAlert.className=bSuccess?'alert alert-success':'alert alert-danger';
+  objAlert.focus();
+}
 function showRegistrationAlert(strText, bSuccess) {
   const objAlert = $('register-alert');
   objAlert.textContent = `${bSuccess ? 'Success' : 'Error'}: ${strText}`;
@@ -34,7 +40,7 @@ async function init(){
   const bProfile=['register','profile'].includes(strMode),bPassword=['login','register','reset','invite','password'].includes(strMode),bEmail=['login','register','forgot','resend'].includes(strMode);
   if(strMode==='profile'){$('account-home-link').hidden=true;$('title').hidden=true;$('management-header').hidden=false;$('management-title').textContent='Your profile';$('management-subtitle').textContent='Manage your account details';setupBackLink('/',true);$('management-title').focus();}
   $('profile-fields').hidden=!bProfile;$('phone-field').hidden=!bProfile;for(const strId of ['firstName','lastName','phone'])$(strId).required=bProfile;
-  $('email-field').hidden=!(bEmail||strMode==='profile');$('email').required=bEmail;$('email').disabled=strMode==='profile';$('email').classList.toggle('readonly-input',strMode==='profile');$('email-locked-help').hidden=strMode!=='profile';if(strMode==='profile'){$('email').value=objSession.user.email;$('email').setAttribute('aria-describedby','email-locked-help');}else $('email').removeAttribute('aria-describedby');$('account-actions').hidden=Boolean(objSession.authenticated);$('profile-actions').hidden=strMode!=='profile';$('signed-in').hidden=strMode==='profile'||!objSession.authenticated;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
+  $('email-field').hidden=!(bEmail||strMode==='profile');$('email').required=bEmail;$('email').disabled=strMode==='profile';$('email').classList.toggle('readonly-input',strMode==='profile');$('email-locked-help').hidden=strMode!=='profile';if(strMode==='profile'){$('email').value=objSession.user.email;$('email').setAttribute('aria-describedby','email-locked-help');}else $('email').removeAttribute('aria-describedby');$('account-actions').hidden=Boolean(objSession.authenticated);$('profile-actions').hidden=strMode!=='profile';$('logout').hidden=strMode!=='profile';$('signed-in').hidden=strMode==='profile'||!objSession.authenticated;$('password-field').hidden=!bPassword;$('password').required=bPassword;$('password').autocomplete=strMode==='login'?'current-password':'new-password';if(bPassword&&strMode!=='login')$('password').minLength=12;
   const bConfirmPassword = ['register', 'reset'].includes(strMode);
   $('confirm-password-field').hidden = !bConfirmPassword;
   $('confirmPassword').required = bConfirmPassword;
@@ -42,6 +48,9 @@ async function init(){
   $('current-field').hidden=strMode!=='password';$('currentPassword').required=strMode==='password';
   $('instructions').textContent=strMode==='register'?'All fields are required. We use your name, email, and phone to manage your account and fulfill orders. Verify your email before signing in.':strMode==='profile'?'Update your name and phone. Your account email is shown for reference.':'Use the email address associated with your account.';
   if (strMode === 'reset') $('instructions').textContent = 'Enter your new password below.';
+  $('forgot-instructions').hidden=strMode!=='forgot';
+  $('instructions').hidden=strMode==='forgot';
+  if(strMode==='forgot')$('email').setAttribute('aria-describedby','forgot-instructions');
   if(strMode==='profile')for(const strId of ['firstName','lastName','phone'])$(strId).value=strId==='phone'?normalizePhone(objSession.user.phone):objSession.user[strId];
  }catch(objError){announce(objError.message);}
 }
@@ -88,16 +97,39 @@ $('account-form').onsubmit=async objEvent=>{
     }
     return;
   }
+  if(strMode==='forgot'){
+    $('forgot-alert').className='alert d-none';
+    $('forgot-alert').textContent='';
+    await api('/api/auth/forgot',{email:$('email').value});
+    showForgotAlert('If an account exists for that email, a reset link has been sent. Please check your inbox.',true);
+    return;
+  }
   const objResult=await api('/api/auth/'+strEndpoint,objInput);$('password').value='';$('currentPassword').value='';announce(objResult.message||'Signed in.');
   if (strMode === 'reset') $('confirmPassword').value = '';
   if(strMode==='login'){const strNext=objQuery.get('next');location.assign(['/staff','/admin','/admin/analytics','/admin/accounts','/admin/menu','/admin/management'].includes(strNext)?strNext:objResult.user?.role==='worker'?'/staff':'/');}
   else if(strMode!=='profile'){$('account-form').hidden=true;$('title').focus();}
  }catch(objError){
   if (strMode === 'register') showRegistrationAlert('Unable to complete registration. Please retry.', false);
+  else if(strMode==='forgot')showForgotAlert(objError.message||'Unable to request a reset link. Please try again.',false);
   else announce(objError.message);
  }finally{$('submit').disabled=false;}
 };
-$('reset-password').onclick=async()=>{if(!objAuthenticatedUser?.email)return;const objButton=$('reset-password');objButton.disabled=true;try{const objResult=await api('/api/auth/forgot',{email:objAuthenticatedUser.email});announce(objResult.message||'If a matching account exists, a password reset link will be sent.');}catch(objError){announce(objError.message);}finally{objButton.disabled=false;}};
+$('reset-password').onclick=async()=>{
+ if(!objAuthenticatedUser?.email)return;
+ const objButton=$('reset-password');
+ if(objButton.disabled)return;
+ objButton.disabled=true;
+ objButton.textContent='Sending…';
+ announce('Sending reset email…');
+ try{
+  await api('/api/auth/forgot',{email:objAuthenticatedUser.email});
+  objButton.textContent='Email Sent';
+  announce('Email Sent. Please check your inbox.');
+ }catch(objError){
+  objButton.textContent='Reset Password';
+  announce(objError.message||'Unable to send the reset email. Please try again.');
+ }finally{objButton.disabled=false;}
+};
 $('phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 $('invite-phone').addEventListener('input',objEvent=>{objEvent.target.value=normalizePhone(objEvent.target.value);});
 for(const strId of ['logout','signed-in-logout'])$(strId).onclick=async()=>{try{await api('/api/auth/logout',{});location.assign('/');}catch(objError){announce(objError.message);}};
